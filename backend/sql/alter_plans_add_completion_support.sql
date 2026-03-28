@@ -1,0 +1,11 @@
+-- Plan checklist completion (application-level / JSONB)
+--
+-- Each element in `plans.checklist_items` may include:
+--   "completed": true | false
+--
+-- Older rows without this key are treated as completed = false when read.
+-- No table DDL change is required: jsonb already stores arbitrary fields per item.
+--
+-- Optional documentation for operators:
+-- comment on column public.plans.checklist_items is
+--   'Array of task objects: label, description, time_estimate, optional additional_info, optional completed (bool).';
