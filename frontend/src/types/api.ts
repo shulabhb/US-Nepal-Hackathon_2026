@@ -167,6 +167,8 @@ export type GenerateChatReplyRequest = {
   latest_checkin?: Record<string, unknown> | null;
   active_plan?: Record<string, unknown> | null;
   saved_plan_summaries?: Record<string, unknown>[];
+  /** Rule-based burnout snapshot (non-clinical). */
+  burnout_context?: Record<string, unknown> | null;
   conversation_history?: { role: string; content: string }[];
   session_context?: Record<string, unknown> | null;
 };

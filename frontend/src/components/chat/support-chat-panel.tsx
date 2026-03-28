@@ -25,13 +25,20 @@ import {
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
 import { generateChatReply } from "@/lib/api/ai";
+import { getCheckinHistory } from "@/lib/api/checkins";
 import { getPlans } from "@/lib/api/plans";
 import {
   buildActivePlanContext,
+  buildBurnoutChatContext,
   buildLatestCheckinPayload,
   buildSavedPlanSummaries,
 } from "@/lib/dashboard/chat-context";
 import { planChecklistProgress } from "@/lib/dashboard/plan-checklist";
+import { buildRichChatOpening } from "@/lib/dashboard/seed-assistant-message";
+import {
+  buildBurnoutViewModel,
+  previousCheckinFromHistory,
+} from "@/lib/burnout/burnout-view-model";
 import { cn } from "@/lib/utils";
 import type { CheckinDetailResponse, StoredPlan } from "@/types/api";
 
@@ -72,8 +79,8 @@ type Props = {
   checkin: CheckinDetailResponse;
   initialAssistantMessage: string;
   className?: string;
-  /** When set, “latest check-in” opens this instead of scrolling to a DOM id. */
-  onOpenCheckIns?: () => void;
+  /** When set, “latest check-in” / Burnout navigation opens this tab instead of scrolling to a DOM id. */
+  onOpenBurnout?: () => void;
 };
 
 export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
@@ -83,7 +90,7 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
       checkin,
       initialAssistantMessage,
       className,
-      onOpenCheckIns,
+      onOpenBurnout,
     },
     ref,
   ) {
@@ -99,6 +106,8 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
       },
     ]);
     const [plans, setPlans] = useState<StoredPlan[] | null>(null);
+    const [previousCheckin, setPreviousCheckin] =
+      useState<CheckinDetailResponse | null>(null);
     const [draft, setDraft] = useState("");
     const [sending, setSending] = useState(false);
     const [sendError, setSendError] = useState<string | null>(null);
@@ -110,17 +119,38 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
 
     useEffect(() => {
       let cancelled = false;
-      void getPlans(anonymousId)
-        .then((list) => {
-          if (!cancelled) setPlans(list);
-        })
-        .catch(() => {
-          if (!cancelled) setPlans([]);
+      void Promise.allSettled([
+        getPlans(anonymousId),
+        getCheckinHistory(anonymousId),
+      ]).then((results) => {
+        if (cancelled) return;
+        const planList =
+          results[0].status === "fulfilled" ? results[0].value : [];
+        const history =
+          results[1].status === "fulfilled" ? results[1].value : [];
+        setPlans(planList);
+        const prev = previousCheckinFromHistory(history, checkin.id);
+        setPreviousCheckin(prev);
+        const model = buildBurnoutViewModel(checkin, {
+          previousCheckin: prev,
+          latestPlanChecklist: planList[0]?.checklist_items ?? null,
         });
+        const rich = buildRichChatOpening(
+          checkin,
+          model,
+          planList[0] ?? null,
+        );
+        setMessages((prevMsgs) => {
+          if (prevMsgs.length === 1 && prevMsgs[0].role === "assistant") {
+            return [{ ...prevMsgs[0], content: rich }];
+          }
+          return prevMsgs;
+        });
+      });
       return () => {
         cancelled = true;
       };
-    }, [anonymousId]);
+    }, [anonymousId, checkin]);
 
     useEffect(() => {
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -145,8 +175,8 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
 
         if (trimmed.toLowerCase().includes("show my latest check-in")) {
           requestAnimationFrame(() => {
-            if (onOpenCheckIns) {
-              onOpenCheckIns();
+            if (onOpenBurnout) {
+              onOpenBurnout();
               return;
             }
             document
@@ -157,6 +187,10 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
 
         try {
           const list = plans ?? [];
+          const burnoutModel = buildBurnoutViewModel(checkin, {
+            previousCheckin,
+            latestPlanChecklist: list[0]?.checklist_items ?? null,
+          });
           const data = await generateChatReply({
             anonymous_id: anonymousId,
             message: trimmed,
@@ -164,6 +198,7 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
             active_plan:
               list[0] != null ? buildActivePlanContext(list[0]) : null,
             saved_plan_summaries: buildSavedPlanSummaries(list, true),
+            burnout_context: buildBurnoutChatContext(burnoutModel),
             conversation_history: historyForApi,
             session_context: {
               note:
@@ -203,7 +238,8 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
         messages,
         sending,
         plans,
-        onOpenCheckIns,
+        previousCheckin,
+        onOpenBurnout,
       ],
     );
 
@@ -211,8 +247,8 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
       (chipId: string, label: string) => {
         if (chipId === "checkin") {
           requestAnimationFrame(() => {
-            if (onOpenCheckIns) {
-              onOpenCheckIns();
+            if (onOpenBurnout) {
+              onOpenBurnout();
               return;
             }
             document
@@ -222,7 +258,7 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
         }
         void sendUserMessage(label);
       },
-      [onOpenCheckIns, sendUserMessage],
+      [onOpenBurnout, sendUserMessage],
     );
 
     useImperativeHandle(
@@ -262,7 +298,8 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
                 Support Chat
               </h2>
               <p className="max-w-xl text-xs leading-snug text-muted-foreground sm:text-sm">
-                Using your latest check-in and active plan for context.
+                Uses your check-in, rule-based burnout snapshot, and saved plan
+                when available—all read-only here.
               </p>
             </div>
             <div

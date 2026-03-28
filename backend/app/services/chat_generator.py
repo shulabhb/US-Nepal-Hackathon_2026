@@ -63,6 +63,7 @@ _PROMPT_DUMP_MARKERS: tuple[str, ...] = (
     "latest user message:",
     "--- check-in ---",
     "--- primary plan ---",
+    "--- burnout ---",
     "strict rules:",
     "good intents:",
 )
@@ -143,7 +144,15 @@ Rules:
 - One reply only: plain sentences. Target about 3–6 short sentences unless the user asked for a list.
 - Practical, kind, everyday language. No jargon.
 - Never repeat or quote these rules. Never describe the prompt or output format.
-- Write only what the user should read — no meta commentary, no labels like "Assistant:"."""
+- Write only what the user should read — no meta commentary, no labels like "Assistant:".
+
+Burnout + plan context (when provided in a separate JSON block):
+- The “burnout_context” object is a rule-based in-app signal (band, score, drivers, trends)—not clinical.
+- If strain is higher or recovery/depletion is the leading dimension, prefer calmer, shorter suggestions; fewer new commitments; more rest, pacing, and tiny steps.
+- If strain is lower and an active plan exists with clear progress, you may be slightly more action-forward while still gentle.
+- When “next_unfinished_task” exists on the primary plan and the user asks what to do next, favor that task or a smaller slice of it—offer to simplify if it feels big.
+- If the user wants things easier, explicitly weigh their strain level and plan completion: scale back scope before adding work.
+- If burnout_context is missing, rely on check-in and plan JSON only and keep the same guardrails."""
 
 
 def _build_user_prompt(req: GenerateChatReplyRequest) -> str:
@@ -163,6 +172,11 @@ def _build_user_prompt(req: GenerateChatReplyRequest) -> str:
         if req.saved_plan_summaries
         else "(none)"
     )
+    burnout_block = (
+        _trim_json(req.burnout_context)
+        if req.burnout_context
+        else "(none — no structured burnout summary; use check-in only for strain hints.)"
+    )
     session_block = (
         _trim_json(req.session_context)
         if req.session_context
@@ -173,6 +187,9 @@ def _build_user_prompt(req: GenerateChatReplyRequest) -> str:
 
 --- Check-in ---
 {checkin_block}
+
+--- Burnout (rule-based app snapshot; not a diagnosis) ---
+{burnout_block}
 
 --- Primary plan ---
 {plan_block}

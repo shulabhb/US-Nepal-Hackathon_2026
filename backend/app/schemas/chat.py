@@ -13,6 +13,10 @@ class GenerateChatReplyRequest(BaseModel):
     latest_checkin: dict[str, Any] | None = None
     active_plan: dict[str, Any] | None = None
     saved_plan_summaries: list[dict[str, Any]] = Field(default_factory=list)
+    burnout_context: dict[str, Any] | None = Field(
+        default=None,
+        description="Rule-based burnout snapshot from the client (non-clinical).",
+    )
     conversation_history: list[dict[str, str]] = Field(default_factory=list)
     session_context: dict[str, Any] | None = None
 

@@ -8,6 +8,22 @@ export function planChecklistProgress(items: PlanChecklistItem[]) {
   return { completed, total, percent };
 }
 
+/** First checklist row not marked complete — for chat / dashboard hints. */
+export function nextUnfinishedChecklistTask(
+  items: PlanChecklistItem[],
+): { label: string; description: string | null } | null {
+  const item = items.find((i) => i.completed !== true);
+  if (!item) return null;
+  const label = item.label?.trim() ?? "";
+  if (!label) return null;
+  const legacy = item as PlanChecklistItem & { rationale?: string | null };
+  const rawDesc =
+    item.description?.trim() || legacy.rationale?.trim() || "";
+  const description =
+    rawDesc.length > 0 ? rawDesc.slice(0, 280) : null;
+  return { label, description };
+}
+
 function coerceItemFields(item: PlanChecklistItem) {
   const legacy = item as PlanChecklistItem & { rationale?: string | null };
   const description =

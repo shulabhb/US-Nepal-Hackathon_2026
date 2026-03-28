@@ -7,10 +7,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { SupportChatPanelHandle } from "@/components/chat/support-chat-panel";
 import { SupportChatPanel } from "@/components/chat/support-chat-panel";
+import { BurnoutSummarySection } from "@/components/dashboard/burnout-summary-section";
 import { CheckinsTabPanel } from "@/components/dashboard/checkins-tab-panel";
 import { PlanTabPanel } from "@/components/dashboard/plan-tab-panel";
 import { DashboardLanding } from "@/components/dashboard/dashboard-landing";
-import type { QuickActionId } from "@/components/dashboard/quick-actions-card";
 import { AppShell } from "@/components/shell/app-shell";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,10 +25,10 @@ import type { DashboardTabId } from "@/lib/dashboard/dashboard-tab";
 import {
   dashboardHref,
   isDashboardTabId,
+  legacyDashboardTabRedirect,
   normalizeDashboardTab,
 } from "@/lib/dashboard/dashboard-tab";
 import { buildSeededAssistantMessage } from "@/lib/dashboard/seed-assistant-message";
-import { labelForStoredGoal } from "@/lib/dashboard/stored-labels";
 import { getLatestCheckin } from "@/lib/api/checkins";
 import { getOrCreateAnonymousId } from "@/lib/onboarding/anonymous-id";
 import {
@@ -73,17 +73,6 @@ function summarySentenceFrom(checkin: CheckinDetailResponse): string {
   return "Your check-in is synced. Pick a tab when you need more depth.";
 }
 
-function currentFocusFrom(checkin: CheckinDetailResponse): string {
-  const s = checkin.recommendation_snapshot;
-  if (s && typeof s === "object") {
-    const raw = s.immediate_actions;
-    if (Array.isArray(raw) && raw[0] && typeof raw[0] === "string") {
-      return raw[0];
-    }
-  }
-  return labelForStoredGoal(checkin.goal);
-}
-
 export function DashboardClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -92,11 +81,16 @@ export function DashboardClient() {
   const [phase, setPhase] = useState<"loading" | "ready" | "empty">("loading");
   const [checkin, setCheckin] = useState<CheckinDetailResponse | null>(null);
   const chatRef = useRef<SupportChatPanelHandle>(null);
-  const pendingFollowUp = useRef<string | null>(null);
 
   useEffect(() => {
     const q = searchParams.get("tab");
-    if (q != null && q !== "" && !isDashboardTabId(q)) {
+    if (q == null || q === "") return;
+    const legacy = legacyDashboardTabRedirect(q);
+    if (legacy) {
+      router.replace(dashboardHref(legacy));
+      return;
+    }
+    if (!isDashboardTabId(q)) {
       router.replace(dashboardHref("overview"));
     }
   }, [searchParams, router]);
@@ -128,15 +122,6 @@ export function DashboardClient() {
     };
   }, [router]);
 
-  useEffect(() => {
-    if (activeTab !== "chat") return;
-    const id = pendingFollowUp.current;
-    if (!id) return;
-    pendingFollowUp.current = null;
-    const t = window.setTimeout(() => chatRef.current?.playFollowUp(id), 0);
-    return () => clearTimeout(t);
-  }, [activeTab]);
-
   const reload = () => {
     const state = readOnboardingState();
     const resume = getOnboardingResumePath(state);
@@ -167,22 +152,6 @@ export function DashboardClient() {
       router.push(dashboardHref(tab), { scroll: false });
     },
     [router],
-  );
-
-  const triggerChatFollowUp = useCallback(
-    (id: QuickActionId) => {
-      if (id === "retake") {
-        handleRetake();
-        return;
-      }
-      if (activeTab === "chat") {
-        chatRef.current?.playFollowUp(id);
-        return;
-      }
-      pendingFollowUp.current = id;
-      router.push(dashboardHref("chat"), { scroll: false });
-    },
-    [activeTab, handleRetake, router],
   );
 
   if (phase === "loading") {
@@ -269,7 +238,7 @@ export function DashboardClient() {
               anonymousId={getOrCreateAnonymousId()}
               checkin={checkin}
               initialAssistantMessage={seeded}
-              onOpenCheckIns={() => pushTab("checkins")}
+              onOpenBurnout={() => pushTab("burnout")}
             />
           </div>
         ) : (
@@ -281,15 +250,13 @@ export function DashboardClient() {
               <div role="tabpanel" aria-label="Dashboard overview">
                 <DashboardLanding
                   checkin={checkin}
+                  anonymousId={getOrCreateAnonymousId()}
                   riskLabel={riskLabelFrom(checkin)}
                   summaryLine={summaryText}
-                  focusLine={currentFocusFrom(checkin)}
-                  formattedSavedAt={formatSavedAt(checkin.created_at)}
-                  onPlan={() => triggerChatFollowUp("plan")}
-                  onCalm={() => triggerChatFollowUp("calm")}
                   onRetake={handleRetake}
                   onOpenChat={() => pushTab("chat")}
-                  onViewCheckIns={() => pushTab("checkins")}
+                  onOpenPlan={() => pushTab("plan")}
+                  onViewBurnout={() => pushTab("burnout")}
                 />
               </div>
             ) : null}
@@ -301,34 +268,58 @@ export function DashboardClient() {
               />
             ) : null}
 
-            {activeTab === "checkins" ? (
+            {activeTab === "burnout" ? (
               <div
-                className="w-full space-y-5"
+                className="w-full space-y-8"
                 role="tabpanel"
-                aria-label="Check-ins"
+                aria-label="Burnout"
               >
-                <h2 className="font-heading text-xl font-semibold">Check-ins</h2>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Burnout
+                  </p>
+                  <h2 className="font-heading text-xl font-semibold tracking-tight">
+                    Your burnout picture
+                  </h2>
+                  <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                    Interpretation up top; your saved snapshot and history
+                    stay below for context.
+                  </p>
+                </div>
+
+                <BurnoutSummarySection
+                  key={checkin.id}
+                  checkin={checkin}
+                  anonymousId={getOrCreateAnonymousId()}
+                />
+
+                <div className="space-y-2">
+                  <h3 className="font-heading text-sm font-semibold text-foreground">
+                    Snapshot & history
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Raw check-in detail—same latest and history views as before.
+                  </p>
+                </div>
+
                 <CheckinsTabPanel
                   checkin={checkin}
                   formattedLatestSavedAt={formatSavedAt(checkin.created_at)}
                   anonymousId={getOrCreateAnonymousId()}
                 />
+
+                <div className="max-w-xl space-y-3 rounded-xl border border-border/65 bg-card/50 p-4 shadow-sm">
+                  <h3 className="font-heading text-sm font-semibold text-foreground">
+                    Insights
+                  </h3>
+                  <StatusBadge variant="soon">Coming soon</StatusBadge>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    Plain-language patterns across sleep, stress, and energy.
+                  </p>
+                </div>
+
                 <p className="text-xs text-muted-foreground">
                   Charts and longer trends — coming later.
-                </p>
-              </div>
-            ) : null}
-
-            {activeTab === "insights" ? (
-              <div
-                className="max-w-lg space-y-3"
-                role="tabpanel"
-                aria-label="Insights"
-              >
-                <h2 className="font-heading text-xl font-semibold">Insights</h2>
-                <StatusBadge variant="soon">Coming soon</StatusBadge>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Plain-language patterns across sleep, stress, and energy.
                 </p>
               </div>
             ) : null}

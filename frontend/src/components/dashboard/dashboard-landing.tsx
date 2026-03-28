@@ -1,163 +1,107 @@
 "use client";
 
-import { CalendarClock, MessageCircle, RotateCcw, Wind } from "lucide-react";
-
-import { StatusBadge } from "@/components/dashboard/status-badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
-  labelForStoredGoal,
-  labelForStoredPressure,
-} from "@/lib/dashboard/stored-labels";
+  MessageCircle,
+  PenLine,
+  Route,
+  Target,
+} from "lucide-react";
+
+import { DashboardOverviewBurnout } from "@/components/dashboard/dashboard-overview-burnout";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CheckinDetailResponse } from "@/types/api";
 
 type Props = {
   checkin: CheckinDetailResponse;
+  anonymousId: string;
   riskLabel: string;
   summaryLine: string;
-  focusLine: string;
-  formattedSavedAt: string;
-  onPlan: () => void;
-  onCalm: () => void;
   onRetake: () => void;
   onOpenChat: () => void;
-  onViewCheckIns: () => void;
-  className?: string;
+  onOpenPlan: () => void;
+  onViewBurnout: () => void;
 };
 
 export function DashboardLanding({
   checkin,
+  anonymousId,
   riskLabel,
   summaryLine,
-  focusLine,
-  formattedSavedAt,
-  onPlan,
-  onCalm,
   onRetake,
   onOpenChat,
-  onViewCheckIns,
-  className,
+  onOpenPlan,
+  onViewBurnout,
 }: Props) {
-  const stress = checkin.stress_level;
-  const energy = checkin.energy_level;
-  const sleepBits = [
-    checkin.sleep_duration,
-    checkin.sleep_quality,
-  ].join(" · ");
-
-  const metrics = [
-    { label: "Today's focus", value: focusLine },
-    { label: "Pressure", value: labelForStoredPressure(checkin.pressure) },
-    { label: "Goal", value: labelForStoredGoal(checkin.goal) },
-  ] as const;
-
   return (
-    <div className={cn("space-y-6", className)}>
-      <div className="space-y-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Overview
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge variant="live">Live</StatusBadge>
-          <span className="text-base font-semibold text-foreground sm:text-lg">
-            {riskLabel}
-          </span>
-        </div>
-        <p className="line-clamp-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          {summaryLine}
-        </p>
-      </div>
+    <div className="mx-auto max-w-5xl space-y-4 pb-10">
+      <DashboardOverviewBurnout
+        checkin={checkin}
+        anonymousId={anonymousId}
+        riskLabel={riskLabel}
+        summaryLine={summaryLine}
+        onOpenChat={onOpenChat}
+        onOpenPlan={onOpenPlan}
+        onOpenBurnout={onViewBurnout}
+        onRetake={onRetake}
+      />
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          size="sm"
-          className="h-9 rounded-xl gap-2"
-          onClick={onPlan}
+      {/* Quick access — last section */}
+      <section
+        aria-labelledby="overview-quick-heading"
+        className={cn(
+          "rounded-2xl border border-border/45 bg-muted/10 p-4 shadow-sm sm:p-5",
+        )}
+      >
+        <h2
+          id="overview-quick-heading"
+          className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
         >
-          <CalendarClock className="size-4" aria-hidden />
-          Make a plan
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          className="h-9 rounded-xl gap-2"
-          onClick={onCalm}
-        >
-          <Wind className="size-4" aria-hidden />
-          Calm down now
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-9 rounded-xl gap-2"
-          onClick={onRetake}
-        >
-          <RotateCcw className="size-4" aria-hidden />
-          Retake
-        </Button>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        {metrics.map((m) => (
-          <Card
-            key={m.label}
-            className="border-border/65 bg-card/80 py-0 shadow-sm backdrop-blur-sm"
+          Quick access
+        </h2>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-10 rounded-xl gap-2 shadow-sm"
+            onClick={onOpenChat}
           >
-            <CardContent className="p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {m.label}
-              </p>
-              <p className="mt-1.5 line-clamp-3 text-sm font-medium leading-snug text-foreground">
-                {m.value}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <Card className="border-border/65 bg-card/80 shadow-sm">
-        <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0 space-y-1 text-sm">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Latest check-in
-            </p>
-            <p className="text-muted-foreground">
-              <span className="font-medium text-foreground">Saved</span>{" "}
-              {formattedSavedAt}
-            </p>
-            <p className="text-muted-foreground">
-              Stress <span className="font-medium text-foreground">{stress}</span>
-              {" · "}
-              Energy{" "}
-              <span className="font-medium text-foreground">{energy}</span>
-            </p>
-            <p className="line-clamp-1 text-xs text-muted-foreground">{sleepBits}</p>
-          </div>
+            <MessageCircle className="size-4" aria-hidden />
+            Support chat
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-10 rounded-xl gap-2 shadow-sm"
+            onClick={onOpenPlan}
+          >
+            <Route className="size-4" aria-hidden />
+            Plan
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-10 rounded-xl gap-2 shadow-sm"
+            onClick={onViewBurnout}
+          >
+            <Target className="size-4" aria-hidden />
+            Burnout
+          </Button>
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="shrink-0 rounded-xl"
-            onClick={onViewCheckIns}
+            className="h-10 rounded-xl gap-2 shadow-sm"
+            onClick={onRetake}
           >
-            View check-ins
+            <PenLine className="size-4" aria-hidden />
+            New check-in
           </Button>
-        </CardContent>
-      </Card>
-
-      <Button
-        type="button"
-        size="lg"
-        className="h-11 w-full rounded-xl gap-2 sm:w-auto sm:min-w-[14rem]"
-        onClick={onOpenChat}
-      >
-        <MessageCircle className="size-4" aria-hidden />
-        Open support chat
-      </Button>
+        </div>
+      </section>
     </div>
   );
 }

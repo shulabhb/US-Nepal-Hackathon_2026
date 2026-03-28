@@ -11,8 +11,7 @@ const PRIMARY_TABS: { id: DashboardTabId; label: string }[] = [
   { id: "overview", label: "Dashboard" },
   { id: "chat", label: "Support Chat" },
   { id: "plan", label: "Plan" },
-  { id: "checkins", label: "Check-ins" },
-  { id: "insights", label: "Insights" },
+  { id: "burnout", label: "Burnout" },
 ];
 
 type Props = {
