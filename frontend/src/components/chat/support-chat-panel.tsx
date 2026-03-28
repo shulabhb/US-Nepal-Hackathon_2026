@@ -1,6 +1,17 @@
 "use client";
 
-import { Loader2, MessageCircle, Send } from "lucide-react";
+/**
+ * Support Chat — three-part vertical shell (must sit inside a height-bounded parent):
+ *
+ * 1. Top chrome — `header` (shrink-0): title, badges, context strip. Does not scroll.
+ * 2. Middle — single `overflow-y-auto` region (flex-1 min-h-0): message log only.
+ * 3. Bottom — `footer` (shrink-0): quick prompts + composer. Does not scroll.
+ *
+ * The dashboard chat tab uses AppShell `viewportFill` + a flex-1 column so this
+ * panel receives the remaining height below the app nav; only part (2) scrolls.
+ */
+
+import { Loader2, Send } from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -11,6 +22,7 @@ import {
   useState,
 } from "react";
 
+import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
 import { generateChatReply } from "@/lib/api/ai";
 import { getPlans } from "@/lib/api/plans";
@@ -19,6 +31,7 @@ import {
   buildLatestCheckinPayload,
   buildSavedPlanSummaries,
 } from "@/lib/dashboard/chat-context";
+import { planChecklistProgress } from "@/lib/dashboard/plan-checklist";
 import { cn } from "@/lib/utils";
 import type { CheckinDetailResponse, StoredPlan } from "@/types/api";
 
@@ -38,6 +51,15 @@ const FOLLOW_UPS: { id: string; label: string }[] = [
 
 function newId(): string {
   return `m-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function formatCheckinTime(iso: string): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "";
+  return new Date(t).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 export type SupportChatPanelHandle = {
@@ -65,8 +87,10 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
     },
     ref,
   ) {
-    const listId = useId();
-    const scrollRef = useRef<HTMLDivElement>(null);
+    const baseId = useId();
+    const threadEndRef = useRef<HTMLDivElement>(null);
+    const composerId = `${baseId}-composer`;
+
     const [messages, setMessages] = useState<ChatMessage[]>(() => [
       {
         id: newId(),
@@ -78,6 +102,11 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
     const [draft, setDraft] = useState("");
     const [sending, setSending] = useState(false);
     const [sendError, setSendError] = useState<string | null>(null);
+
+    const activePlan = plans != null && plans.length > 0 ? plans[0] : null;
+    const planProgress = activePlan
+      ? planChecklistProgress(activePlan.checklist_items)
+      : null;
 
     useEffect(() => {
       let cancelled = false;
@@ -94,9 +123,7 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
     }, [anonymousId]);
 
     useEffect(() => {
-      const el = scrollRef.current;
-      if (!el) return;
-      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, sending]);
 
     const sendUserMessage = useCallback(
@@ -214,129 +241,211 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
       setDraft("");
     }, [draft, sendUserMessage]);
 
+    const headingId = `${baseId}-heading`;
+
     return (
       <section
         className={cn(
-          "flex min-h-[22rem] flex-col overflow-hidden rounded-2xl border border-border/80 bg-card/95 shadow-md",
+          "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background",
           className,
         )}
-        aria-labelledby={`${listId}-heading`}
+        aria-labelledby={headingId}
       >
-        <div className="flex items-center gap-2 border-b border-border/70 px-4 py-3">
-          <MessageCircle className="size-4 text-primary" aria-hidden />
-          <div>
-            <h2
-              id={`${listId}-heading`}
-              className="font-heading text-sm font-semibold text-foreground"
-            >
-              Support chat
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Local AI · planning &amp; next steps · not clinical care
-            </p>
-          </div>
-        </div>
-
-        <div
-          ref={scrollRef}
-          role="log"
-          aria-live="polite"
-          aria-relevant="additions"
-          className="max-h-[min(52vh,28rem)] flex-1 space-y-3 overflow-y-auto px-4 py-4"
-        >
-          {messages.map((m) =>
-            m.role === "assistant" ? (
-              <div key={m.id} className="flex justify-start">
-                <div className="max-w-[min(100%,28rem)] whitespace-pre-wrap rounded-2xl rounded-bl-md border border-border/60 bg-muted/50 px-4 py-3 text-sm leading-relaxed text-foreground shadow-sm">
-                  {m.content}
-                </div>
-              </div>
-            ) : (
-              <div key={m.id} className="flex justify-end">
-                <div className="max-w-[min(100%,28rem)] whitespace-pre-wrap rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-sm leading-relaxed text-primary-foreground shadow-sm">
-                  {m.content}
-                </div>
-              </div>
-            ),
-          )}
-          {sending ? (
-            <div className="flex justify-start">
-              <div className="flex items-center gap-2 rounded-2xl rounded-bl-md border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin shrink-0" aria-hidden />
-                Thinking…
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="border-t border-border/60 bg-muted/20 px-3 py-3">
-          <p className="mb-2 px-1 text-xs font-medium text-muted-foreground">
-            Try a starting point
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {FOLLOW_UPS.map((c) => (
-              <Button
-                key={c.id}
-                type="button"
-                variant="secondary"
-                size="sm"
-                disabled={sending}
-                className="h-auto rounded-full border border-border/70 bg-background/90 px-3 py-1.5 text-xs font-normal text-foreground shadow-none hover:bg-accent/80"
-                onClick={() => onChip(c.id, c.label)}
+        {/* (1) Fixed chat chrome — does not scroll with the thread */}
+        <header className="shrink-0 border-b border-border/40 px-1 pb-3 pt-1 sm:px-0">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 space-y-1.5">
+              <h2
+                id={headingId}
+                className="font-heading text-lg font-semibold tracking-tight text-foreground sm:text-xl"
               >
-                {c.label}
-              </Button>
-            ))}
+                Support Chat
+              </h2>
+              <p className="max-w-xl text-xs leading-snug text-muted-foreground sm:text-sm">
+                Using your latest check-in and active plan for context.
+              </p>
+            </div>
+            <div
+              className="flex shrink-0 flex-wrap items-center gap-2"
+              aria-label="Chat mode"
+            >
+              <StatusBadge variant="live" className="text-[10px]">
+                Local AI
+              </StatusBadge>
+              <StatusBadge variant="soon" className="text-[10px]">
+                Beta
+              </StatusBadge>
+            </div>
+          </div>
+
+          <div
+            className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/30 pt-3 text-[11px] text-muted-foreground sm:text-xs"
+            aria-label="Context in use"
+          >
+            <span>
+              Check-in{" "}
+              <span className="text-foreground/80">
+                {formatCheckinTime(checkin.created_at) || "available"}
+              </span>
+            </span>
+            {plans === null ? (
+              <span className="text-muted-foreground/80">Plan context…</span>
+            ) : activePlan && planProgress && planProgress.total > 0 ? (
+              <span className="max-w-[min(100%,20rem)] truncate sm:max-w-md">
+                Plan{" "}
+                <span className="font-medium text-foreground/90">
+                  {activePlan.title}
+                </span>
+                <span aria-hidden> · </span>
+                <span className="tabular-nums">
+                  {planProgress.percent}% done
+                </span>
+              </span>
+            ) : activePlan ? (
+              <span className="max-w-[min(100%,20rem)] truncate sm:max-w-md">
+                Plan{" "}
+                <span className="font-medium text-foreground/90">
+                  {activePlan.title}
+                </span>
+              </span>
+            ) : (
+              <span>No saved plan yet</span>
+            )}
+          </div>
+          <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
+            Not for crisis or clinical care.
+          </p>
+        </header>
+
+        {/* (2) Only vertical scroll container in this workspace */}
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+          role="region"
+          aria-label="Chat messages"
+        >
+          <div
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions"
+            aria-label="Conversation"
+            className="mx-auto flex w-full max-w-2xl flex-col space-y-5 px-3 py-5 sm:px-4 sm:py-6"
+          >
+            {messages.map((m) =>
+              m.role === "assistant" ? (
+                <article
+                  key={m.id}
+                  className="flex justify-start"
+                  aria-label="Assistant"
+                >
+                  <div className="max-w-[min(100%,42rem)] whitespace-pre-wrap rounded-xl bg-muted/50 px-4 py-3 text-sm leading-relaxed text-foreground">
+                    {m.content}
+                  </div>
+                </article>
+              ) : (
+                <article
+                  key={m.id}
+                  className="flex justify-end"
+                  aria-label="You"
+                >
+                  <div className="max-w-[min(100%,85%)] whitespace-pre-wrap rounded-xl border border-border/50 bg-background px-4 py-2.5 text-sm leading-relaxed text-foreground shadow-sm">
+                    {m.content}
+                  </div>
+                </article>
+              ),
+            )}
+            {sending ? (
+              <div className="flex justify-start" aria-live="polite">
+                <div className="flex items-center gap-2 rounded-xl bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                  <Loader2
+                    className="size-4 shrink-0 animate-spin"
+                    aria-hidden
+                  />
+                  Thinking…
+                </div>
+              </div>
+            ) : null}
+            <div ref={threadEndRef} aria-hidden className="h-px shrink-0" />
           </div>
         </div>
 
-        <div className="space-y-1 border-t border-border/70 bg-card px-3 py-2">
-          <p className="px-1 text-[10px] leading-relaxed text-muted-foreground">
-            What you share here guides this chat only. It does not automatically
-            change your saved check-in or plans.
-          </p>
-        </div>
+        {/* (3) Fixed composer — flex sibling, not sticky; parent column bounds height */}
+        <footer className="shrink-0 border-t border-border/50 bg-background pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-4px_20px_-6px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_20px_-6px_rgba(0,0,0,0.25)]">
+          <div className="mx-auto w-full max-w-2xl px-3 sm:px-4">
+            <p
+              id={`${baseId}-quick-label`}
+              className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/90"
+            >
+              Quick prompts
+            </p>
+            <div
+              className="mb-3 flex flex-wrap gap-2"
+              role="group"
+              aria-labelledby={`${baseId}-quick-label`}
+            >
+              {FOLLOW_UPS.map((c) => (
+                <Button
+                  key={c.id}
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={sending}
+                  className="h-9 min-h-9 rounded-full border border-border/60 bg-muted/30 px-3 text-xs font-normal text-foreground shadow-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => onChip(c.id, c.label)}
+                >
+                  {c.label}
+                </Button>
+              ))}
+            </div>
 
-        <div className="flex items-end gap-2 border-t border-border/70 bg-card px-3 py-3">
-          <label htmlFor={`${listId}-composer`} className="sr-only">
-            Message
-          </label>
-          <textarea
-            id={`${listId}-composer`}
-            rows={2}
-            disabled={sending}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                onSubmit();
-              }
-            }}
-            placeholder="Ask about next steps, prioritizing, or lightening your plan…"
-            className="min-h-10 flex-1 resize-none rounded-xl border border-input bg-background/80 px-3 py-2.5 text-sm text-foreground shadow-inner placeholder:text-muted-foreground disabled:opacity-60"
-          />
-          <Button
-            type="button"
-            size="icon"
-            variant="secondary"
-            className="shrink-0 rounded-xl"
-            disabled={sending || !draft.trim()}
-            aria-label="Send message"
-            onClick={() => onSubmit()}
-          >
-            {sending ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden />
-            ) : (
-              <Send className="size-4" aria-hidden />
-            )}
-          </Button>
-        </div>
-        {sendError ? (
-          <p className="border-t border-border/60 px-3 py-2 text-xs text-destructive">
-            {sendError}
-          </p>
-        ) : null}
+            <div className="flex min-h-[44px] items-end gap-2 pb-3">
+              <label htmlFor={composerId} className="sr-only">
+                Message to assistant
+              </label>
+              <textarea
+                id={composerId}
+                rows={2}
+                disabled={sending}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    onSubmit();
+                  }
+                }}
+                placeholder="Ask a question… (Shift+Enter for new line)"
+                aria-describedby={`${baseId}-compose-hint`}
+                className="min-h-[44px] flex-1 resize-none rounded-xl border border-input bg-background px-3 py-3 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60"
+              />
+              <Button
+                type="button"
+                size="icon"
+                className="size-11 shrink-0 rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                disabled={sending || !draft.trim()}
+                aria-label="Send message"
+                onClick={() => onSubmit()}
+              >
+                {sending ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <Send className="size-4" aria-hidden />
+                )}
+              </Button>
+            </div>
+            <p id={`${baseId}-compose-hint`} className="sr-only">
+              Press Enter to send. Shift+Enter adds a line. Replies use read-only
+              context and do not change saved check-ins or plans.
+            </p>
+            {sendError ? (
+              <p
+                className="pb-3 text-xs text-destructive"
+                role="alert"
+              >
+                {sendError}
+              </p>
+            ) : null}
+          </div>
+        </footer>
       </section>
     );
   },

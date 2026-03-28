@@ -11,7 +11,6 @@ import { CheckinsTabPanel } from "@/components/dashboard/checkins-tab-panel";
 import { PlanTabPanel } from "@/components/dashboard/plan-tab-panel";
 import { DashboardLanding } from "@/components/dashboard/dashboard-landing";
 import type { QuickActionId } from "@/components/dashboard/quick-actions-card";
-import { StatusBadge } from "@/components/dashboard/status-badge";
 import { AppShell } from "@/components/shell/app-shell";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { StatusBadge } from "@/components/dashboard/status-badge";
 import type { DashboardTabId } from "@/lib/dashboard/dashboard-tab";
 import {
   dashboardHref,
@@ -245,49 +245,24 @@ export function DashboardClient() {
   const summaryText = summarySentenceFrom(checkin);
 
   return (
-    <AppShell activeTab={activeTab} onRetake={handleRetake}>
-      <div className="relative flex-1">
+    <AppShell
+      activeTab={activeTab}
+      onRetake={handleRetake}
+      viewportFill={activeTab === "chat"}
+    >
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div
           className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_75%_45%_at_50%_-8%,oklch(0.76_0.06_215_/0.11),transparent),radial-gradient(ellipse_50%_40%_at_100%_35%,oklch(0.55_0.04_250_/0.05),transparent)]"
           aria-hidden
         />
 
-        <div
-          id="dashboard-main-content"
-          className="relative mx-auto min-h-[55vh] max-w-6xl px-4 py-6 sm:py-8"
-        >
-          {activeTab === "overview" ? (
-            <div role="tabpanel" aria-label="Dashboard overview">
-              <DashboardLanding
-                checkin={checkin}
-                riskLabel={riskLabelFrom(checkin)}
-                summaryLine={summaryText}
-                focusLine={currentFocusFrom(checkin)}
-                formattedSavedAt={formatSavedAt(checkin.created_at)}
-                onPlan={() => triggerChatFollowUp("plan")}
-                onCalm={() => triggerChatFollowUp("calm")}
-                onRetake={handleRetake}
-                onOpenChat={() => pushTab("chat")}
-                onViewCheckIns={() => pushTab("checkins")}
-              />
-            </div>
-          ) : null}
-
+        {activeTab === "chat" ? (
           <div
-            hidden={activeTab !== "chat"}
-            className="space-y-4 pb-4"
+            id="dashboard-main-content"
+            className="relative z-0 mx-auto flex min-h-0 min-w-0 w-full max-w-6xl flex-1 flex-col overflow-hidden px-4 py-3 sm:py-4"
             role="tabpanel"
             aria-label="Support chat"
           >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="font-heading text-xl font-semibold tracking-tight">
-                Support Chat
-              </h2>
-              <div className="flex flex-wrap gap-2">
-                <StatusBadge variant="live">Local AI</StatusBadge>
-                <StatusBadge variant="soon">Beta</StatusBadge>
-              </div>
-            </div>
             <SupportChatPanel
               ref={chatRef}
               key={checkin.id}
@@ -295,80 +270,80 @@ export function DashboardClient() {
               checkin={checkin}
               initialAssistantMessage={seeded}
               onOpenCheckIns={() => pushTab("checkins")}
-              className="min-h-[22rem] lg:min-h-[28rem]"
             />
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 text-xs text-muted-foreground"
-                onClick={() => triggerChatFollowUp("sleep")}
-              >
-                Sleep tonight
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 text-xs text-muted-foreground"
-                onClick={() => triggerChatFollowUp("workload")}
-              >
-                Workload
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 text-xs text-muted-foreground"
-                onClick={() => pushTab("checkins")}
-              >
-                Latest check-in
-              </Button>
-            </div>
           </div>
+        ) : (
+          <div
+            id="dashboard-main-content"
+            className="relative z-0 mx-auto min-h-[55vh] w-full max-w-6xl px-4 py-6 sm:py-8"
+          >
+            {activeTab === "overview" ? (
+              <div role="tabpanel" aria-label="Dashboard overview">
+                <DashboardLanding
+                  checkin={checkin}
+                  riskLabel={riskLabelFrom(checkin)}
+                  summaryLine={summaryText}
+                  focusLine={currentFocusFrom(checkin)}
+                  formattedSavedAt={formatSavedAt(checkin.created_at)}
+                  onPlan={() => triggerChatFollowUp("plan")}
+                  onCalm={() => triggerChatFollowUp("calm")}
+                  onRetake={handleRetake}
+                  onOpenChat={() => pushTab("chat")}
+                  onViewCheckIns={() => pushTab("checkins")}
+                />
+              </div>
+            ) : null}
 
-          {activeTab === "plan" ? (
-            <PlanTabPanel
-              checkin={checkin}
-              anonymousId={getOrCreateAnonymousId()}
-            />
-          ) : null}
-
-          {activeTab === "checkins" ? (
-            <div className="w-full space-y-5" role="tabpanel" aria-label="Check-ins">
-              <h2 className="font-heading text-xl font-semibold">Check-ins</h2>
-              <CheckinsTabPanel
+            {activeTab === "plan" ? (
+              <PlanTabPanel
                 checkin={checkin}
-                formattedLatestSavedAt={formatSavedAt(checkin.created_at)}
                 anonymousId={getOrCreateAnonymousId()}
               />
-              <p className="text-xs text-muted-foreground">
-                Charts and longer trends — coming later.
-              </p>
-            </div>
-          ) : null}
+            ) : null}
 
-          {activeTab === "insights" ? (
-            <div className="max-w-lg space-y-3" role="tabpanel" aria-label="Insights">
-              <h2 className="font-heading text-xl font-semibold">Insights</h2>
-              <StatusBadge variant="soon">Coming soon</StatusBadge>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                Plain-language patterns across sleep, stress, and energy.
-              </p>
-            </div>
-          ) : null}
+            {activeTab === "checkins" ? (
+              <div
+                className="w-full space-y-5"
+                role="tabpanel"
+                aria-label="Check-ins"
+              >
+                <h2 className="font-heading text-xl font-semibold">Check-ins</h2>
+                <CheckinsTabPanel
+                  checkin={checkin}
+                  formattedLatestSavedAt={formatSavedAt(checkin.created_at)}
+                  anonymousId={getOrCreateAnonymousId()}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Charts and longer trends — coming later.
+                </p>
+              </div>
+            ) : null}
 
-          <div className="mt-12 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-border/40 pt-8 text-center text-xs text-muted-foreground">
-            <span>Not for crisis or clinical care.</span>
-            <Link
-              href="/recommendations"
-              className="font-medium text-primary underline-offset-4 hover:underline"
-            >
-              Recommendations
-            </Link>
+            {activeTab === "insights" ? (
+              <div
+                className="max-w-lg space-y-3"
+                role="tabpanel"
+                aria-label="Insights"
+              >
+                <h2 className="font-heading text-xl font-semibold">Insights</h2>
+                <StatusBadge variant="soon">Coming soon</StatusBadge>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  Plain-language patterns across sleep, stress, and energy.
+                </p>
+              </div>
+            ) : null}
+
+            <div className="mt-12 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-border/40 pt-8 text-center text-xs text-muted-foreground">
+              <span>Not for crisis or clinical care.</span>
+              <Link
+                href="/recommendations"
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
+                Recommendations
+              </Link>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </AppShell>
   );

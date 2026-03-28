@@ -8,6 +8,12 @@ type Props = {
   activeTab?: DashboardTabId;
   onRetake?: () => void;
   className?: string;
+  /**
+   * When true, the shell is exactly one viewport tall and does not grow with
+   * content. The area below the nav is a bounded flex column (`flex-1 min-h-0`)
+   * for workspaces that own their own scroll (e.g. Support Chat).
+   */
+  viewportFill?: boolean;
 };
 
 export function AppShell({
@@ -16,9 +22,16 @@ export function AppShell({
   activeTab = "overview",
   onRetake,
   className,
+  viewportFill = false,
 }: Props) {
   return (
-    <div className={cn("flex min-h-screen flex-col bg-background", className)}>
+    <div
+      className={cn(
+        "flex flex-col bg-background",
+        viewportFill ? "h-dvh max-h-dvh overflow-hidden" : "min-h-screen",
+        className,
+      )}
+    >
       <a
         href="#dashboard-main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:shadow-lg"
@@ -29,8 +42,15 @@ export function AppShell({
         variant={navVariant}
         activeTab={navVariant === "full" ? activeTab : undefined}
         onRetake={onRetake}
+        className={viewportFill ? "shrink-0" : undefined}
       />
-      {children}
+      {viewportFill ? (
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {children}
+        </div>
+      ) : (
+        children
+      )}
     </div>
   );
 }

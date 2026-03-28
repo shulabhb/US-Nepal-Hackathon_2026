@@ -100,9 +100,17 @@ def generate_json(prompt: str, output_shape_example: dict[str, Any]) -> dict[str
         ) from exc
 
 
-def generate_text(prompt: str, *, max_tokens: int = 512) -> str:
+def generate_text(
+    prompt: str,
+    *,
+    max_tokens: int = 512,
+    system: str | None = None,
+) -> str:
     """
     Plain-text completion from the local model (Ollama ``/api/generate``, no JSON mode).
+
+    When ``system`` is set, it is sent as Ollama's separate system field so output-format
+    rules are less likely to be echoed in the user-facing completion.
     """
     payload: dict[str, Any] = {
         "model": settings.local_ai_model,
@@ -110,6 +118,8 @@ def generate_text(prompt: str, *, max_tokens: int = 512) -> str:
         "stream": False,
         "options": {"num_predict": max_tokens},
     }
+    if system and system.strip():
+        payload["system"] = system.strip()
 
     timeout = httpx.Timeout(settings.local_ai_timeout_seconds)
 
