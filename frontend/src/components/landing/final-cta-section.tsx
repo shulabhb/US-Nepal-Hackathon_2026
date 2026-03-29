@@ -16,7 +16,7 @@ export function FinalCtaSection() {
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_60%_at_50%_120%,oklch(0.55_0.08_215_/0.12),transparent),linear-gradient(180deg,oklch(0.97_0.015_250),oklch(0.985_0.012_250))]"
         aria-hidden
       />
-      <div className="relative mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
+      <div className="relative mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
         <div className="mx-auto max-w-3xl rounded-2xl border border-border/80 bg-card/90 p-8 text-center shadow-sm backdrop-blur-md sm:p-10">
           <h2
             id="cta-heading"

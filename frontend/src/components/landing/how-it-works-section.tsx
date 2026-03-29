@@ -37,7 +37,7 @@ export function HowItWorksSection() {
       className="border-b border-border/60"
       aria-labelledby="how-heading"
     >
-      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
+      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
         <div className="max-w-2xl">
           <p className="text-xs font-semibold uppercase tracking-wider text-primary">
             Flow
@@ -53,7 +53,7 @@ export function HowItWorksSection() {
             to this browser session.
           </p>
         </div>
-        <ol className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <ol className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {steps.map(({ step, title, body, icon: Icon }, index) => (
             <li key={step}>
               <Card

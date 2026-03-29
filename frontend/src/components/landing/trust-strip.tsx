@@ -35,8 +35,8 @@ export function TrustStrip() {
       className="border-b border-border/60 bg-muted/35"
       aria-labelledby="trust-heading"
     >
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-14 lg:px-8">
-        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-primary">
               At a glance
