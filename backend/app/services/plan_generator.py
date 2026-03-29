@@ -31,9 +31,9 @@ _PLAN_OUTPUT_SHAPE_EXAMPLE: dict[str, Any] = {
     "checklist_items": [
         {
             "label": "Short action title (few words)",
-            "description": "One or two sentences: what to do and how it helps, non-clinical.",
+            "description": "2–4 sentences: what to do; then explicitly which user-reported struggle, goal, symptom, sleep/stress pattern, or plan answer this step addresses (only from their data). Non-clinical.",
             "time_estimate": "~15 minutes",
-            "additional_info": "Optional extra tip, or omit this key",
+            "additional_info": "Optional: one line naming a specific detail they gave (e.g. exam date). Omit if not needed.",
         }
     ],
     "notes": [
@@ -59,7 +59,7 @@ def _notes_instructions(req: GeneratePlanRequest) -> str:
   (5) RECREATION / RECOVERY: At least one specific idea (e.g. 15-min walk, short social check-in, hobby block) tied to their workload so recovery is part of the plan—not generic advice unless clearly tied to context.
 """
     return """
-- notes: 0–4 short strings only. Practical reminders tied to their answers. For non–personal-task plans, keep burnout commentary light—do not over-analyze; skip generic tips that don’t fit their context.
+- notes: 0–4 short strings only. Practical reminders tied to their answers; at least one note should name a theme from their plan_context or check-in (e.g. exam timing, hardest part, time available). For non–personal-task plans, keep burnout commentary light—do not over-analyze; skip generic tips that don’t fit their context.
 """
 
 
@@ -81,6 +81,148 @@ def _looks_like_json_schema_echo(raw: dict[str, Any]) -> bool:
     ):
         return True
     return False
+
+
+# Phrases suggesting little time left or high stress about readiness (user text, lowercased blob).
+_TIME_PRESSURE_MARKERS: tuple[str, ...] = (
+    "tomorrow",
+    "today",
+    "tonight",
+    "this evening",
+    "few hours",
+    "not prepared",
+    "unprepared",
+    "haven't studied",
+    "havent studied",
+    "didn't study",
+    "didnt study",
+    "running out of time",
+    "last minute",
+    "cram",
+    "panic",
+    "exam soon",
+    "next day",
+    "the day after",
+)
+
+_UNPREPARED_MARKERS: tuple[str, ...] = (
+    "not prepared",
+    "unprepared",
+    "haven't studied",
+    "havent studied",
+    "didn't study",
+    "didnt study",
+    "panic",
+    "cram",
+    "last minute",
+    "running out of time",
+)
+
+
+def _plan_qa_blob(req: GeneratePlanRequest) -> str:
+    """Lowercased text from user_request + plan_context for urgency heuristics."""
+    parts: list[str] = []
+    if req.user_request and str(req.user_request).strip():
+        parts.append(str(req.user_request).strip().lower())
+    if req.plan_context:
+        for v in req.plan_context.values():
+            if v and str(v).strip():
+                parts.append(str(v).strip().lower())
+    return " ".join(parts)
+
+
+def _time_pressure_block(req: GeneratePlanRequest) -> str:
+    blob = _plan_qa_blob(req)
+    if not blob or not any(m in blob for m in _TIME_PRESSURE_MARKERS):
+        return ""
+    lines = [
+        "TIME PRESSURE / URGENCY (inferred from their answers—do not shame them):",
+        "- They are under tight timing; prioritize minimum-viable prep, clear sequencing, and mandatory breaks and sleep—not endless new material.",
+        "- Acknowledge stress honestly; keep steps small and completable. If the burnout snapshot shows low energy, poor sleep, or high stress, explicitly reduce scope and add recovery.",
+        "- With very little time before an assessment: one focused review pass plus one targeted practice block, then a wind-down that protects sleep, usually beats unfocused cramming.",
+    ]
+    if any(m in blob for m in _UNPREPARED_MARKERS):
+        lines.append(
+            "- They signaled feeling rushed or under-prepared: validate that; suggest triage (what to lock in vs defer), not guilt."
+        )
+    pt = (req.plan_type or "").strip()
+    if pt == "study_plan":
+        lines.append(
+            "- For study plans: tie steps to what they said is hardest (e.g. organizing vs memorizing); "
+            "under urgency, favor one-page summaries, targeted drills, and scheduled breaks over broad coverage."
+        )
+    return "\n".join(lines) + "\n\n"
+
+
+def _burnout_snapshot_block(req: GeneratePlanRequest) -> str:
+    bc = req.burnout_context
+    if not isinstance(bc, dict) or not bc:
+        return ""
+    try:
+        blob = json.dumps(bc, indent=2, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return ""
+    return (
+        "\nRule-based burnout snapshot (non-diagnostic—use to calibrate pacing and recovery):\n"
+        f"{blob}\n\n"
+        "When generating checklist_items: if the snapshot suggests elevated strain, low energy, or sleep stress, "
+        "weave explicit recovery, boundaries, and realistic load into steps—especially when TIME PRESSURE rules apply. "
+        "Stay practical; do not diagnose.\n\n"
+    )
+
+
+def _theme_anchor_block(checkin_context: object) -> str:
+    """
+    Short, quotable themes from the saved check-in so each plan step can cite real user data.
+    """
+    if not isinstance(checkin_context, dict):
+        return ""
+    ctx = checkin_context
+    lines: list[str] = []
+    role = ctx.get("role")
+    if role:
+        lines.append(f"- Role / context: {role}")
+    pressure = ctx.get("pressure")
+    if pressure:
+        lines.append(f"- Pressure theme: {pressure}")
+    goal = ctx.get("goal")
+    if goal:
+        lines.append(f"- Help / goal focus: {goal}")
+    syms = ctx.get("symptoms")
+    if isinstance(syms, list) and syms:
+        joined = ", ".join(str(s) for s in syms[:20])
+        lines.append(f"- Symptoms / signals they selected: {joined}")
+    for key, lab in (
+        ("stress_level", "Stress level (1–10)"),
+        ("energy_level", "Energy level (1–10)"),
+        ("sleep_quality", "Sleep quality"),
+        ("sleep_duration", "Sleep duration"),
+        ("sleep_consistency", "Sleep consistency"),
+    ):
+        v = ctx.get(key)
+        if v is not None and str(v).strip():
+            lines.append(f"- {lab}: {v}")
+    rs = ctx.get("recommendation_snapshot")
+    if isinstance(rs, dict):
+        summ = rs.get("summary")
+        if isinstance(summ, str) and summ.strip():
+            lines.append(f"- Check-in summary (their words): {summ.strip()[:450]}")
+        ia = rs.get("immediate_actions")
+        if isinstance(ia, list) and ia:
+            first = ia[0]
+            if isinstance(first, str) and first.strip():
+                lines.append(f"- A priority action they saw: {first.strip()[:300]}")
+    ac = ctx.get("additional_context")
+    if isinstance(ac, str) and ac.strip():
+        lines.append(f"- Additional context they wrote: {ac.strip()[:500]}")
+    if not lines:
+        return ""
+    return (
+        "\nUSER-REPORTED THEMES (cite these in checklist descriptions when relevant; "
+        "paraphrase in plain language—do not invent struggles):\n"
+        + "\n".join(lines)
+        + "\n"
+    )
 
 
 def _personal_tasks_block(req: GeneratePlanRequest) -> str:
@@ -132,6 +274,7 @@ USER-DEFINED TASKS MODE:
 {schedule_note}
 Tasks they want included (respect all; order by priority then your judgment for flow):
 {chr(10).join(lines)}
+In checklist descriptions, name which user task(s) or stated struggle each step carries forward (e.g. "This implements your high-priority …" or "Addresses the time you estimated for …").
 """
 
 
@@ -166,6 +309,10 @@ def _sanitize_generated_title(title: str, plan_name: str | None) -> str:
 
 def _build_prompt(req: GeneratePlanRequest) -> str:
     ctx_json = json.dumps(req.checkin_context, indent=2, ensure_ascii=False)
+    theme_anchors = _theme_anchor_block(req.checkin_context)
+    burnout_block = _burnout_snapshot_block(req)
+    pressure_block = _time_pressure_block(req)
+    urgent = bool(pressure_block.strip())
     extras = ""
     if req.user_request and req.user_request.strip():
         extras += f"\nUser focus / request:\n{req.user_request.strip()}\n"
@@ -198,25 +345,36 @@ def _build_prompt(req: GeneratePlanRequest) -> str:
     notes_block = _notes_instructions(req)
     time_rules = _time_aware_checklist_rules(req)
 
+    summary_bullet = (
+        "- summary: 2–4 sentences, concrete and kind; mention pacing/rest if full schedule was requested; "
+        "for personal daily/weekly plans, briefly reflect time/load realism; when burnout_context or urgency applies, "
+        "connect to strain/energy/sleep themes from the snapshot and their Q&A."
+    )
+    if urgent:
+        summary_bullet = (
+            "- summary: Open by acknowledging their situation (exam timing, feeling under-prepared, hectic day, or low energy from the snapshot) in a steady, kind tone—no alarmism or guilt. "
+            "Then 2–4 sentences total: concrete next steps; mention pacing/rest where relevant; connect to burnout snapshot and their answers when applicable."
+        )
+
     return f"""You are helping with a wellness planning assistant (not clinical care).
 Produce a practical, supportive, non-medical plan. Do not diagnose, prescribe, or claim to treat conditions.
 Avoid medical certainty; use everyday language and small, realistic steps the person could try.
 Plan type requested: {req.plan_type}
-{custom_plan_note}{extras}{plan_ctx_block}{personal_block}
-Check-in context (JSON):
+{custom_plan_note}{extras}{plan_ctx_block}{personal_block}{theme_anchors}{burnout_block}{pressure_block}Check-in context (JSON):
 {ctx_json}
 
 Requirements:
-- title: short, encouraging (if a user plan name was given, prefer incorporating it). Never include UUIDs, hex ids, "anonymous", or any opaque client identifier—titles are shown to humans only.
+- title: short, encouraging; fix obvious spelling of subject or exam names from their answers (e.g. “Linear Algebra” not typos). If a user plan name was given, prefer incorporating it. Never include UUIDs, hex ids, "anonymous", or opaque ids.
 - plan_type: repeat or refine "{req.plan_type}" as a short label
-- summary: 2–4 sentences, concrete and kind; mention pacing/rest if full schedule was requested; for personal daily/weekly plans, briefly reflect time/load realism.
+{summary_bullet}
 - time_horizon: must match {"this single day" if (req.schedule_kind == "daily") else "this week" if (req.schedule_kind == "weekly") else "the checklist"} — e.g. "today", "this week"
 - checklist_items: at least 1 task, at most {max_items}; each task MUST have:
-  - label: short headline (not empty)
-  - description: 1–2 sentences, actionable, supportive, not medical advice
+  - label: short scannable headline (not empty)
+  - description: 2–4 sentences, non-clinical. First sentence(s): concrete action. MUST include at least one sentence that explicitly names WHICH user-reported theme this step addresses—draw only from: (a) USER-REPORTED THEMES above, (b) plan_context Q&A, (c) user_tasks list, (d) JSON fields (symptoms, pressures, goals, sleep/stress/energy). Example: "This responds to what you shared about struggling to build a study plan before your exam." If a step is recovery or pacing, say how it balances a load or symptom they reported. Do not claim a link to data that is not in their context.
   - time_estimate: required on EVERY item—never omit; realistic duration (e.g. "~10 min", "~30 min")
-  - additional_info: optional one-line extra tip (or omit / null)
-  Keep labels and descriptions concise; no diagnosis or treatment claims.
+  - additional_info: optional one line that ties to a specific plan_context answer or check-in detail (e.g. dates, hours per day they gave)—omit if redundant
+  Keep labels concise; descriptions may be longer for clarity. No diagnosis or treatment claims.
+  {"- URGENCY: If TIME PRESSURE rules appeared above, include at least one checklist item that is clearly a real break, meal, or sleep-protecting wind-down (labeled as such)—not disguised as more study work." if urgent else ""}
 {time_rules}{notes_block}
 """
 

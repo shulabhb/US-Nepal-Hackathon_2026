@@ -238,11 +238,17 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
           restoreOnFail?: ChatPlanSession,
         ) => {
           try {
+            const listForModel = plans ?? [];
+            const burnoutForPlan = buildBurnoutViewModel(checkin, {
+              previousCheckin,
+              latestPlanChecklist: listForModel[0]?.checklist_items ?? null,
+            });
             const data = await generatePlan({
               anonymous_id: anonymousId,
               plan_type: base.planType,
               user_request: base.userRequest.trim() || null,
               checkin_context: buildPlanCheckinContext(checkin),
+              burnout_context: buildBurnoutChatContext(burnoutForPlan),
               plan_context:
                 base.planType === "personal_tasks"
                   ? null

@@ -18,6 +18,8 @@ import {
   buildPlanCheckinContext,
   generatePlan,
 } from "@/lib/api/ai";
+import { buildBurnoutChatContext } from "@/lib/dashboard/chat-context";
+import { buildBurnoutViewModel } from "@/lib/burnout/burnout-view-model";
 import {
   buildPlanContextPayload,
   fieldsForPlanType,
@@ -386,11 +388,16 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
           }
         : null;
     try {
+      const burnoutModel = buildBurnoutViewModel(checkin, {
+        previousCheckin: null,
+        latestPlanChecklist: savedPlans?.[0]?.checklist_items ?? null,
+      });
       const data = await generatePlan({
         anonymous_id: anonymousId,
         plan_type: planType,
         user_request: userRequest.trim() || null,
         checkin_context: buildPlanCheckinContext(checkin),
+        burnout_context: buildBurnoutChatContext(burnoutModel),
         plan_context:
           planType === "personal_tasks" ? null : plan_context,
         plan_name:
@@ -429,6 +436,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
     scheduleKind,
     draftTasks,
     generateFullSchedule,
+    savedPlans,
   ]);
 
   const runSave = React.useCallback(async () => {

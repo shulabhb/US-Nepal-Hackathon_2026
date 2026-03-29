@@ -132,6 +132,8 @@ export type GeneratePlanRequest = {
   plan_type: string;
   user_request?: string | null;
   checkin_context: Record<string, unknown>;
+  /** Rule-based burnout snapshot — calibrates intensity & recovery in generated steps. */
+  burnout_context?: Record<string, unknown> | null;
   /** Trimmed question answers for the selected plan type. */
   plan_context?: Record<string, string> | null;
   /** Optional: name from “My tasks” flow. */
