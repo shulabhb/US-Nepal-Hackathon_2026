@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 <div align="center">
   <h1>🔋 Burnout Radar By Team All Nighters</h1>
   <p><strong>Check your strain before you make your next plans. 100% Anonymous.</strong></p>
@@ -102,9 +101,7 @@ The frontend is built with Next.js App Router, TailwindCSS v4, and Shadcn UI.
 3. Set up Environment Variables:
    - Create a `.env.local` or `.env` file in the frontend directory based on your backend configs:
      ```env
-     NEXT_PUBLIC_API_URL=http://localhost:8000
-     NEXT_PUBLIC_SUPABASE_URL="your-supabase-url"
-     NEXT_PUBLIC_SUPABASE_ANON_KEY="your-supabase-anon-key"
+        NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
      ```
 4. Start the frontend development server:
    ```bash
