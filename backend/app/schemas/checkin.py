@@ -26,6 +26,8 @@ class Step3Data(BaseModel):
     sleep_quality: str
     sleep_consistency: str
     imported_from_wearable: bool = False
+    wearable_provider: str | None = None
+    wearable_simulation: dict[str, Any] | None = None
 
 
 class MigrationEntry(BaseModel):

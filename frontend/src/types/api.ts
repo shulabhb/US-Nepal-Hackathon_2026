@@ -33,6 +33,10 @@ export type CheckinCreatePayload = {
     sleep_quality: string;
     sleep_consistency: string;
     imported_from_wearable: boolean;
+    /** Demo-only simulated provider id when user used wearable connect UI. */
+    wearable_provider?: string | null;
+    /** Demo-only simulated metrics for future Burnout visualizations. */
+    wearable_simulation?: Record<string, unknown> | null;
   };
   step4: {
     country_of_birth: string | null;

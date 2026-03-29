@@ -96,8 +96,12 @@ export const PLAN_FLOW_CHIP_LABELS = [
   "Help me make a plan",
 ] as const;
 
+/**
+ * Starts the guided Plan-tab flow (1–8). Order matters: longer / specific branches first
+ * (e.g. "make me a plan" before "make a plan").
+ */
 const PLAN_INTENT_RE =
-  /\b(quick\s+plan|make\s+(a\s+)?plan|create\s+(a\s+)?plan|build\s+(a\s+)?plan|new\s+plan|plan\s+for\s+me|help\s+me\s+plan)\b/i;
+  /\b(?:quick\s+plan|make\s+me\s+(?:a\s+)?plan|make\s+(?:a\s+)?plan|create\s+(?:a\s+)?plan|build\s+(?:a\s+)?plan|new\s+plan|plan\s+for\s+me|help\s+me\s+plan|help\s+me\s+make\s+a\s+(?:quick\s+)?plan|(?:re)?start\s+(?:the\s+)?plan|(?:re)?start\s+planning|plan\s+mode|want\s+(?:a\s+)?plan|need\s+(?:a\s+)?plan|guided\s+plan|plan\s+again|back\s+to\s+(?:the\s+)?plan)\b/i;
 
 export function messageStartsPlanFlow(text: string): boolean {
   const t = text.trim();
