@@ -1,14 +1,14 @@
-import type { DashboardTabId } from "@/lib/dashboard/dashboard-tab";
-import { DashboardNav } from "@/components/shell/dashboard-nav";
+import { AppHeader } from "@/components/shell/app-header";
 import { cn } from "@/lib/utils";
 
 type Props = {
   children: React.ReactNode;
   navVariant?: "full" | "minimal";
-  activeTab?: DashboardTabId;
   onRetake?: () => void;
   /** When false, nav shows “Add a check-in”; when true, “Check in again”. */
   hasSavedCheckin?: boolean;
+  onResetDeviceData?: () => void;
+  resetDeviceDataBusy?: boolean;
   className?: string;
   /**
    * When true, the shell is exactly one viewport tall and does not grow with
@@ -21,9 +21,10 @@ type Props = {
 export function AppShell({
   children,
   navVariant = "full",
-  activeTab = "overview",
   onRetake,
   hasSavedCheckin = false,
+  onResetDeviceData,
+  resetDeviceDataBusy = false,
   className,
   viewportFill = false,
 }: Props) {
@@ -41,11 +42,13 @@ export function AppShell({
       >
         Skip to workspace
       </a>
-      <DashboardNav
-        variant={navVariant}
-        activeTab={navVariant === "full" ? activeTab : undefined}
+      <AppHeader
+        variant="workspace"
+        navVariant={navVariant}
         onRetake={onRetake}
         hasSavedCheckin={hasSavedCheckin}
+        onResetDeviceData={onResetDeviceData}
+        resetDeviceDataBusy={resetDeviceDataBusy}
         className={viewportFill ? "shrink-0" : undefined}
       />
       {viewportFill ? (

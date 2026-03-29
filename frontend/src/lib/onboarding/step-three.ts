@@ -1,3 +1,8 @@
+import type {
+  WearableProviderId,
+  WearableSimulationSnapshot,
+} from "@/lib/onboarding/wearable-simulation";
+
 export type SleepDurationBucket =
   | "lt_5"
   | "h_5_6"
@@ -17,6 +22,9 @@ export type OnboardingStep3 = {
   quality: SleepQualityLevel;
   consistency: SleepConsistencyLevel;
   importedFromWearable: boolean;
+  /** Demo “linked” wearable; persists until next check-in edit. */
+  wearable_provider: WearableProviderId | null;
+  wearable_simulation: WearableSimulationSnapshot | null;
 };
 
 export const DURATION_OPTIONS: {
@@ -54,4 +62,6 @@ export const SAMPLE_WEARABLE_STEP3: Omit<OnboardingStep3, "importedFromWearable"
     duration: "h_6_7",
     quality: "okay",
     consistency: "somewhat_consistent",
+    wearable_provider: null,
+    wearable_simulation: null,
   };

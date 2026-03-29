@@ -33,6 +33,10 @@ export type CheckinCreatePayload = {
     sleep_quality: string;
     sleep_consistency: string;
     imported_from_wearable: boolean;
+    /** Demo-only simulated provider id when user used wearable connect UI. */
+    wearable_provider?: string | null;
+    /** Demo-only simulated metrics for future Burnout visualizations. */
+    wearable_simulation?: Record<string, unknown> | null;
   };
   step4: {
     country_of_birth: string | null;
@@ -132,6 +136,8 @@ export type GeneratePlanRequest = {
   plan_type: string;
   user_request?: string | null;
   checkin_context: Record<string, unknown>;
+  /** Rule-based burnout snapshot — calibrates intensity & recovery in generated steps. */
+  burnout_context?: Record<string, unknown> | null;
   /** Trimmed question answers for the selected plan type. */
   plan_context?: Record<string, string> | null;
   /** Optional: name from “My tasks” flow. */
@@ -164,6 +170,7 @@ export type StoredPlan = {
   model: string | null;
   source: string;
   created_at: string;
+  /** Saved-plan generation meta and/or flags such as `marked_complete_by_user`. */
   plan_meta?: SavedPlanGenerationMeta | Record<string, unknown> | null;
 };
 

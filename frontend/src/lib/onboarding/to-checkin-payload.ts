@@ -44,6 +44,8 @@ export function toCheckinPayload(
       sleep_quality: step3.quality,
       sleep_consistency: step3.consistency,
       imported_from_wearable: step3.importedFromWearable,
+      wearable_provider: step3.wearable_provider ?? null,
+      wearable_simulation: step3.wearable_simulation ?? null,
     },
     step4: {
       country_of_birth: step4.country_of_birth ?? null,

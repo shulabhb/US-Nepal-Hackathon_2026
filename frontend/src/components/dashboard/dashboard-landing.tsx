@@ -10,6 +10,8 @@ type Props = {
   onRetake: () => void;
   onOpenChat: () => void;
   onOpenPlan: () => void;
+  /** Opens Support Chat with “Help me make a quick plan” to start the guided flow. */
+  onPersonalizePlan: () => void;
   onViewBurnout: () => void;
 };
 
@@ -20,6 +22,7 @@ export function DashboardLanding({
   onRetake,
   onOpenChat,
   onOpenPlan,
+  onPersonalizePlan,
   onViewBurnout,
 }: Props) {
   return (
@@ -30,6 +33,7 @@ export function DashboardLanding({
         riskLabel={riskLabel}
         onOpenChat={onOpenChat}
         onOpenPlan={onOpenPlan}
+        onPersonalizePlan={onPersonalizePlan}
         onOpenBurnout={onViewBurnout}
         onRetake={onRetake}
       />

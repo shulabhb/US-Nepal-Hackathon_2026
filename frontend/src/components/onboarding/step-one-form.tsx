@@ -1,10 +1,11 @@
 "use client";
 
-import { ArrowLeft, Lock } from "lucide-react";
+import { ArrowLeft, Loader2, Lock } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 
+import { getLatestCheckinMaybe } from "@/lib/api/checkins";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -20,10 +21,12 @@ import {
   PRESSURE_OPTIONS,
   ROLE_OPTIONS,
 } from "@/lib/onboarding/step-one";
+import { getOrCreateAnonymousId } from "@/lib/onboarding/anonymous-id";
 import {
   mergeOnboardingState,
   readOnboardingState,
 } from "@/lib/onboarding/storage";
+import { dashboardHref } from "@/lib/dashboard/dashboard-tab";
 
 function MultiRow({
   id,
@@ -61,12 +64,31 @@ function toggleInList(list: string[], value: string, on: boolean): string[] {
 
 export function StepOneForm() {
   const router = useRouter();
+  const [exitTarget, setExitTarget] = React.useState<
+    "loading" | "home" | "dashboard"
+  >("loading");
   const [roles, setRoles] = React.useState<string[]>([]);
   const [roleOther, setRoleOther] = React.useState("");
   const [pressures, setPressures] = React.useState<string[]>([]);
   const [pressureOther, setPressureOther] = React.useState("");
   const [helpNeeds, setHelpNeeds] = React.useState<string[]>([]);
   const [helpOther, setHelpOther] = React.useState("");
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const latest = await getLatestCheckinMaybe(getOrCreateAnonymousId());
+        if (cancelled) return;
+        setExitTarget(latest == null ? "home" : "dashboard");
+      } catch {
+        if (!cancelled) setExitTarget("home");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   React.useEffect(() => {
     const s = readOnboardingState();
@@ -118,13 +140,26 @@ export function StepOneForm() {
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-10 sm:py-14 md:px-6 lg:py-16">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:rounded-md focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          <ArrowLeft className="size-4 shrink-0" aria-hidden />
-          Back to home
-        </Link>
+        {exitTarget === "loading" ? (
+          <span
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground"
+            aria-busy="true"
+            aria-live="polite"
+          >
+            <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+            <span className="sr-only">Loading navigation</span>
+          </span>
+        ) : (
+          <Link
+            href={
+              exitTarget === "home" ? "/" : dashboardHref("overview")
+            }
+            className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:rounded-md focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <ArrowLeft className="size-4 shrink-0" aria-hidden />
+            {exitTarget === "home" ? "Back to home" : "Dashboard"}
+          </Link>
+        )}
         <p
           className="text-sm font-medium text-muted-foreground"
           aria-live="polite"

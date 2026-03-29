@@ -96,8 +96,12 @@ export const PLAN_FLOW_CHIP_LABELS = [
   "Help me make a plan",
 ] as const;
 
+/**
+ * Starts the guided Plan-tab flow (1–8). Order matters: longer / specific branches first
+ * (e.g. "make me a plan" before "make a plan").
+ */
 const PLAN_INTENT_RE =
-  /\b(quick\s+plan|make\s+(a\s+)?plan|create\s+(a\s+)?plan|build\s+(a\s+)?plan|new\s+plan|plan\s+for\s+me|help\s+me\s+plan)\b/i;
+  /\b(?:quick\s+plan|make\s+me\s+(?:a\s+)?plan|make\s+(?:a\s+)?plan|create\s+(?:a\s+)?plan|build\s+(?:a\s+)?plan|new\s+plan|plan\s+for\s+me|help\s+me\s+plan|help\s+me\s+make\s+a\s+(?:quick\s+)?plan|(?:re)?start\s+(?:the\s+)?plan|(?:re)?start\s+planning|plan\s+mode|want\s+(?:a\s+)?plan|need\s+(?:a\s+)?plan|guided\s+plan|plan\s+again|back\s+to\s+(?:the\s+)?plan)\b/i;
 
 export function messageStartsPlanFlow(text: string): boolean {
   const t = text.trim();
@@ -304,31 +308,52 @@ export function parseSelectChoice(
   return t;
 }
 
+const RULE = "────────────────────────────";
+
 export function summarizeGeneratedPlan(res: GeneratePlanResponse): string {
   const { plan } = res;
-  const lines = plan.checklist_items.slice(0, 12).map((it, i) => {
+  const lines: string[] = [];
+  for (let i = 0; i < Math.min(plan.checklist_items.length, 12); i++) {
+    const it = plan.checklist_items[i];
     const label = (it.label ?? "Step").trim();
     const te = (it.time_estimate ?? "").trim();
-    return `${i + 1}. ${label}${te ? ` · ${te}` : ""}`;
-  });
+    const desc = (it.description ?? "").trim();
+    const add = (it.additional_info ?? "").trim();
+    lines.push(`${i + 1}. ${label}${te ? ` · ${te}` : ""}`);
+    if (desc) {
+      lines.push(`   Why this fits you: ${desc}`);
+    }
+    if (add) {
+      lines.push(`   Note: ${add}`);
+    }
+    lines.push("");
+  }
+  if (lines.length && lines[lines.length - 1] === "") {
+    lines.pop();
+  }
   const more =
     plan.checklist_items.length > 12
-      ? `\n… +${plan.checklist_items.length - 12} more steps`
+      ? `\n… +${plan.checklist_items.length - 12} more steps\n`
       : "";
   return [
-    plan.title,
+    RULE,
+    plan.title.trim(),
+    RULE,
     "",
-    plan.summary,
+    plan.summary.trim(),
     "",
-    `Horizon: ${plan.time_horizon}`,
+    `Horizon — ${plan.time_horizon}`,
     "",
-    "Steps:",
+    "Steps",
+    RULE,
+    "",
     ...lines,
     more,
+    RULE,
     "",
     "Reply **save** to keep this version.",
-    "To tweak one step without redoing the whole plan: add: …  |  remove 3  |  remove: a few words from the title",
-    "To trim wellness/recovery/pacing, say so—we’ll show strain context first.",
+    "To tweak one step without redoing the whole plan: **add:** …  ·  **remove 3**  ·  shorten the title.",
+    "To trim wellness or recovery steps, say so — we’ll regenerate a lighter checklist.",
     "To regenerate from your saved answers, say **regenerate**.",
   ].join("\n");
 }

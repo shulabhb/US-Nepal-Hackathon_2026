@@ -16,3 +16,9 @@ export function getOrCreateAnonymousId(): string {
   localStorage.setItem(STORAGE_KEY, id);
   return id;
 }
+
+/** Clears the device id so the next visit gets a fresh anonymous id. */
+export function clearAnonymousId(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(STORAGE_KEY);
+}

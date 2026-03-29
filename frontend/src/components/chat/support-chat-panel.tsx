@@ -11,7 +11,8 @@
  * panel receives the remaining height below the app nav; only part (2) scrolls.
  */
 
-import { Loader2, Send } from "lucide-react";
+import { ClipboardList, Loader2, Send } from "lucide-react";
+import Link from "next/link";
 import {
   forwardRef,
   useCallback,
@@ -58,6 +59,7 @@ import {
   parseScheduleKind,
   parseSelectChoice,
   parseYesNo,
+  PLAN_FLOW_CHIP_LABELS,
   summarizeGeneratedPlan,
   wantsCancelFlow,
   wantsConfirmRisk,
@@ -67,6 +69,7 @@ import {
   type ChatPlanSession,
   type PendingChatGenerate,
 } from "@/lib/dashboard/chat-plan-flow";
+import { CHAT_SEED_QUICK_PLAN } from "@/lib/dashboard/dashboard-tab";
 import { projectStrainIfStrippingRecovery } from "@/lib/dashboard/burnout-projection";
 import {
   buildPlanContextPayload,
@@ -76,9 +79,10 @@ import {
 import { planChecklistProgress } from "@/lib/dashboard/plan-checklist";
 import { buildRichChatOpening } from "@/lib/dashboard/seed-assistant-message";
 import {
-  buildBurnoutViewModel,
+  buildDashboardAlignedBurnoutViewModel,
   previousCheckinFromHistory,
 } from "@/lib/burnout/burnout-view-model";
+import { dashboardHref } from "@/lib/dashboard/dashboard-tab";
 import { cn } from "@/lib/utils";
 import type { CheckinDetailResponse, StoredPlan } from "@/types/api";
 
@@ -86,6 +90,8 @@ export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  /** Assistant only: show link to Plan tab (e.g. after saving a plan from chat). */
+  showPlanPageLink?: boolean;
 };
 
 const FOLLOW_UPS: { id: string; label: string }[] = [
@@ -121,6 +127,13 @@ type Props = {
   className?: string;
   /** When set, “latest check-in” / Burnout navigation opens this tab instead of scrolling to a DOM id. */
   onOpenBurnout?: () => void;
+  /**
+   * From dashboard `?chatSeed=quick-plan`: after the opening message is ready, send the quick-plan
+   * prompt so the guided plan flow starts (same as the “Help me make a quick plan” chip).
+   */
+  chatSeed?: string | null;
+  /** Called once after the seeded quick-plan message is sent — use to strip `chatSeed` from the URL. */
+  onChatSeedConsumed?: () => void;
 };
 
 export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
@@ -131,11 +144,16 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
       initialAssistantMessage,
       className,
       onOpenBurnout,
+      chatSeed,
+      onChatSeedConsumed,
     },
     ref,
   ) {
     const baseId = useId();
     const threadEndRef = useRef<HTMLDivElement>(null);
+    const composerRef = useRef<HTMLTextAreaElement>(null);
+    const wasSendingRef = useRef(false);
+    const quickPlanSeedConsumedRef = useRef(false);
     const composerId = `${baseId}-composer`;
 
     const [messages, setMessages] = useState<ChatMessage[]>(() => [
@@ -158,6 +176,9 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
       ? planChecklistProgress(activePlan.checklist_items)
       : null;
 
+    /** Guided Plan tab flow in chat — not general Q&A until user cancels or finishes. */
+    const planModeActive = planFlow != null;
+
     useEffect(() => {
       let cancelled = false;
       void Promise.allSettled([
@@ -172,9 +193,9 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
         setPlans(planList);
         const prev = previousCheckinFromHistory(history, checkin.id);
         setPreviousCheckin(prev);
-        const model = buildBurnoutViewModel(checkin, {
+        const model = buildDashboardAlignedBurnoutViewModel(checkin, {
           previousCheckin: prev,
-          latestPlanChecklist: planList[0]?.checklist_items ?? null,
+          plans: planList,
         });
         const rich = buildRichChatOpening(
           checkin,
@@ -196,6 +217,15 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
     useEffect(() => {
       threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, sending]);
+
+    useEffect(() => {
+      if (wasSendingRef.current && !sending) {
+        requestAnimationFrame(() => {
+          composerRef.current?.focus();
+        });
+      }
+      wasSendingRef.current = sending;
+    }, [sending]);
 
     const sendUserMessage = useCallback(
       async (text: string) => {
@@ -226,10 +256,18 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
           });
         }
 
-        const pushAssistant = (content: string) => {
+        const pushAssistant = (
+          content: string,
+          opts?: { showPlanPageLink?: boolean },
+        ) => {
           setMessages((prev) => [
             ...prev,
-            { id: newId(), role: "assistant", content },
+            {
+              id: newId(),
+              role: "assistant",
+              content,
+              showPlanPageLink: opts?.showPlanPageLink,
+            },
           ]);
         };
 
@@ -238,11 +276,20 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
           restoreOnFail?: ChatPlanSession,
         ) => {
           try {
+            const listForModel = plans ?? [];
+            const burnoutForPlan = buildDashboardAlignedBurnoutViewModel(
+              checkin,
+              {
+                previousCheckin,
+                plans: listForModel,
+              },
+            );
             const data = await generatePlan({
               anonymous_id: anonymousId,
               plan_type: base.planType,
               user_request: base.userRequest.trim() || null,
               checkin_context: buildPlanCheckinContext(checkin),
+              burnout_context: buildBurnoutChatContext(burnoutForPlan),
               plan_context:
                 base.planType === "personal_tasks"
                   ? null
@@ -506,7 +553,8 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
                   setPlans(list);
                   setPlanFlow(null);
                   pushAssistant(
-                    "Your plan is saved—open the **Plan** tab to work through it. This chat stays read-only for other tabs.",
+                    "Your plan is saved. Use the link below to open your Plan page and work through checklist steps. This chat stays read-only for other tabs.",
+                    { showPlanPageLink: true },
                   );
                 } catch (e) {
                   pushAssistant(
@@ -544,10 +592,13 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
               }
               if (wantsStripRecoveryOrLightenLoad(userText)) {
                 const list = plans ?? [];
-                const burnoutModel = buildBurnoutViewModel(checkin, {
-                  previousCheckin,
-                  latestPlanChecklist: list[0]?.checklist_items ?? null,
-                });
+                const burnoutModel = buildDashboardAlignedBurnoutViewModel(
+                  checkin,
+                  {
+                    previousCheckin,
+                    plans: list,
+                  },
+                );
                 const { baseline, stripped, line } =
                   projectStrainIfStrippingRecovery({
                     checkin,
@@ -620,9 +671,9 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
           }
 
           const list = plans ?? [];
-          const burnoutModel = buildBurnoutViewModel(checkin, {
+          const burnoutModel = buildDashboardAlignedBurnoutViewModel(checkin, {
             previousCheckin,
-            latestPlanChecklist: list[0]?.checklist_items ?? null,
+            plans: list,
           });
           const data = await generateChatReply({
             anonymous_id: anonymousId,
@@ -676,6 +727,16 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
         onOpenBurnout,
       ],
     );
+
+    useEffect(() => {
+      if (chatSeed !== CHAT_SEED_QUICK_PLAN || quickPlanSeedConsumedRef.current) {
+        return;
+      }
+      if (plans === null) return;
+      quickPlanSeedConsumedRef.current = true;
+      void sendUserMessage(PLAN_FLOW_CHIP_LABELS[0]);
+      onChatSeedConsumed?.();
+    }, [chatSeed, plans, sendUserMessage, onChatSeedConsumed]);
 
     const onChip = useCallback(
       (chipId: string, label: string) => {
@@ -788,6 +849,48 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
           </p>
         </header>
 
+        {planModeActive ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="shrink-0 border-b border-amber-500/40 bg-amber-500/[0.12] px-3 py-2.5 dark:bg-amber-500/15 sm:px-4"
+          >
+            <div className="mx-auto flex max-w-2xl flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+              <div className="flex min-w-0 gap-2.5">
+                <ClipboardList
+                  className="mt-0.5 size-4 shrink-0 text-amber-800 dark:text-amber-300"
+                  aria-hidden
+                />
+                <div className="min-w-0 space-y-1 text-xs leading-snug">
+                  <p className="font-semibold tracking-tight text-foreground">
+                    Plan mode
+                  </p>
+                  <p className="text-muted-foreground">
+                    You’re in the guided plan builder. General questions won’t
+                    get a normal chat reply until you exit. For best results,
+                    follow the prompts in order—some steps are optional.
+                  </p>
+                  <p className="text-muted-foreground">
+                    Reply{" "}
+                    <span className="font-medium text-foreground">cancel</span>{" "}
+                    or use Exit to return to regular support chat.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 shrink-0 border-amber-600/40 bg-background/80 text-foreground hover:bg-amber-500/10 dark:border-amber-500/45"
+                disabled={sending}
+                onClick={() => void sendUserMessage("cancel")}
+              >
+                Exit plan mode
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         {/* (2) Only vertical scroll container in this workspace */}
         <div
           className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch]"
@@ -810,6 +913,16 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
                 >
                   <div className="max-w-[min(100%,42rem)] whitespace-pre-wrap rounded-xl bg-muted/50 px-4 py-3 text-sm leading-relaxed text-foreground">
                     {m.content}
+                    {m.showPlanPageLink ? (
+                      <p className="mt-3 border-t border-border/45 pt-3 whitespace-normal">
+                        <Link
+                          href={dashboardHref("plan")}
+                          className="font-medium text-primary underline decoration-primary/35 underline-offset-[3px] transition-colors hover:text-primary/90 hover:decoration-primary/70"
+                        >
+                          Open Plan page
+                        </Link>
+                      </p>
+                    ) : null}
                   </div>
                 </article>
               ) : (
@@ -859,7 +972,7 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
                   type="button"
                   variant="secondary"
                   size="sm"
-                  disabled={sending}
+                  disabled={sending || planModeActive}
                   className="h-9 min-h-9 rounded-full border border-border/60 bg-muted/30 px-3 text-xs font-normal text-foreground shadow-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={() => onChip(c.id, c.label)}
                 >
@@ -873,6 +986,7 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
                 Message to assistant
               </label>
               <textarea
+                ref={composerRef}
                 id={composerId}
                 rows={2}
                 disabled={sending}
@@ -884,7 +998,11 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
                     onSubmit();
                   }
                 }}
-                placeholder="Ask a question… (Shift+Enter for new line)"
+                placeholder={
+                  planModeActive
+                    ? "Answer the plan prompt, or type cancel… (Shift+Enter for new line)"
+                    : "Ask a question… (Shift+Enter for new line)"
+                }
                 aria-describedby={`${baseId}-compose-hint`}
                 className="min-h-[44px] flex-1 resize-none rounded-xl border border-input bg-background px-3 py-3 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60"
               />
@@ -904,8 +1022,9 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
               </Button>
             </div>
             <p id={`${baseId}-compose-hint`} className="sr-only">
-              Press Enter to send. Shift+Enter adds a line. Replies use read-only
-              context and do not change saved check-ins or plans.
+              {planModeActive
+                ? "Plan mode: messages follow the guided plan flow only. Press Enter to send. Shift+Enter adds a line. Say cancel or use Exit plan mode to return to normal chat."
+                : "Press Enter to send. Shift+Enter adds a line. Replies use read-only context and do not change saved check-ins or plans."}
             </p>
             {sendError ? (
               <p

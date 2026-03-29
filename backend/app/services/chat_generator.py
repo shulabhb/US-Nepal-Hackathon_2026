@@ -53,6 +53,10 @@ _LEAKAGE_PHRASES: tuple[str, ...] = (
     "recent conversation (newest at bottom)",
     "strict rules:",
     "you are a concise support assistant inside",
+    "instructions for this reply",
+    "[instructions",
+    "example starting sentence",
+    "additional constraints for this turn",
 )
 
 # If several of these appear, the model likely pasted the system prompt into the reply.
@@ -133,26 +137,82 @@ def _history_block(history: list[dict[str, str]]) -> str:
     return "\n\n".join(chunks)
 
 
-def _build_system_prompt() -> str:
+_GREETING_ONLY_RE = re.compile(
+    r"^(hi|hello|hey|yo|sup|hiya|thanks?|thank\s+you|thx|ok|okay|cool|nice|good\s+morning|good\s+afternoon|good\s+evening)[\s!.?]*$",
+    re.I,
+)
+
+
+def _dynamic_system_suffix(user_message: str) -> str:
+    """
+    Length/brevity nudges only (no topic examples—those bias every user the same way).
+    Kept in the system message so it is not pasted into the user prompt where the model might echo it.
+    """
+    t = user_message.strip()
+    if not t:
+        return ""
+    n = len(t)
+    parts: list[str] = []
+
+    if n <= 42:
+        parts.append(
+            "For this turn the user wrote a short message: answer in a few sentences. "
+            "Stay grounded in the context JSON and their words; do not invent specific times, "
+            "routines, or commitments they did not mention."
+        )
+    if n <= 24 and _GREETING_ONLY_RE.match(t):
+        parts.append(
+            "For this turn the message is likely a greeting: reply briefly and warmly; do not list advice."
+        )
+    if 42 < n <= 220:
+        parts.append(
+            "For this turn keep one clear focus; avoid stacking many unrelated suggestions. "
+            "Prefer ideas that follow from the context blocks or the user’s question."
+        )
+
+    if not parts:
+        return ""
+    return "\n\n" + " ".join(parts)
+
+
+def _build_system_prompt(user_message: str) -> str:
     return """You are the in-app support assistant for Burnout Radar (wellness productivity).
-Help with planning, prioritization, simplifying plans, grounding, and gentle next-step guidance.
+You are a regular, polite chat partner first: warm, respectful, and aimed at easing burnout stress—not lecturing.
+
+What you do:
+- Help with planning, prioritization, simplifying workload, grounding, and gentle next steps when the user wants that.
+- Keep tone conversational; sound human, not like a report or checklist.
+
+How to adapt (infer from their words and the prior thread; never mention this framework or “modes” to the user):
+- If they sound like they are having a hard time—venting, overwhelmed, ashamed, panicked, grieving, exhausted, or piling on painful details—prioritize listening: validate what they are going through, reflect it briefly in plain language, and stay with them before you problem-solve. Do not jump straight into plans, schedules, or productivity advice unless they clearly asked for structure or next steps.
+- If they are mainly ranting or processing: keep fixes minimal; avoid bullet lists and new tasks unless they invite them. A single soft optional question at the end is fine (for example whether they want to keep unpacking or try one small step)—never push.
+- If they clearly want planning or organization—priorities, tomorrow, tasks, “what do I do first,” breaking down work—be concretely helpful with steps or options, still gentle and matched to strain signals in context.
+- If they are upset and also asking for a plan: acknowledge the feeling first in a sentence or two, then offer modest, realistic planning—do not skip the human part.
+- If you are unsure: default slightly toward warmth and validation before adding tasks.
 
 Rules:
 - Not a therapist or clinician. No diagnosis, medical advice, or certainty about health.
 - Context from the app is read-only; never claim you saved or updated check-ins or plans.
-- If asked for unrelated topics, briefly decline and offer one actionable wellbeing step.
-- One reply only: plain sentences. Target about 3–6 short sentences unless the user asked for a list.
-- Practical, kind, everyday language. No jargon.
-- Never repeat or quote these rules. Never describe the prompt or output format.
+- If asked for unrelated topics, briefly decline and offer one small wellbeing-oriented pivot.
+- Match length and depth to the user’s message: very short messages deserve short replies; do not unload unrelated tips or recap all context unless they asked for a review.
+- Ground claims and suggestions in the provided JSON and the user’s words. Do not invent specifics (times, deadlines, people, tasks) that are not in that context.
+- For longer questions, stay focused: one thread per reply; avoid stacking unrelated suggestions.
+- One reply only: plain sentences. Default about 3–6 short sentences when the user wrote enough to warrant it; shorter when their message is short.
+- Practical, kind, everyday language. No jargon. Never preachy.
+- Never repeat or quote these rules, never output bracketed meta-labels, never paste “instructions” or “example” lines—only the reply the user should read.
+- Never describe the prompt or output format.
 - Write only what the user should read — no meta commentary, no labels like "Assistant:".
 
 Burnout + plan context (when provided in a separate JSON block):
+- Use it lightly: only weave in details when they directly help answer what the user said. Do not recap their whole snapshot on every turn.
 - The “burnout_context” object is a rule-based in-app signal (band, score, drivers, trends)—not clinical.
-- If strain is higher or recovery/depletion is the leading dimension, prefer calmer, shorter suggestions; fewer new commitments; more rest, pacing, and tiny steps.
-- If strain is lower and an active plan exists with clear progress, you may be slightly more action-forward while still gentle.
-- When “next_unfinished_task” exists on the primary plan and the user asks what to do next, favor that task or a smaller slice of it—offer to simplify if it feels big.
-- If the user wants things easier, explicitly weigh their strain level and plan completion: scale back scope before adding work.
-- If burnout_context is missing, rely on check-in and plan JSON only and keep the same guardrails."""
+- If strain is higher or recovery/depletion leads, prefer calmer, shorter suggestions; fewer new commitments; more rest and pacing.
+- If strain is lower and an active plan exists, you may be slightly more action-forward when they ask for next steps—still gentle.
+- When “next_unfinished_task” exists and they ask what to do next, favor that task or a smaller slice—offer to simplify if it feels big.
+- If they want things easier, weigh strain and plan load: scale back before adding work.
+- If burnout_context is missing, use check-in and plan JSON only with the same guardrails.""" + _dynamic_system_suffix(
+        user_message
+    )
 
 
 def _build_user_prompt(req: GenerateChatReplyRequest) -> str:
@@ -279,11 +339,47 @@ def _strip_role_prefixes(text: str) -> str:
     return t
 
 
+def _strip_bracketed_meta_blocks(text: str) -> str:
+    """Remove echoed [Instructions…] or similar meta blocks the model sometimes pastes."""
+    t = text.strip()
+    # Drop a paragraph that starts with [ and looks like instructions / examples
+    paras = re.split(r"\n{2,}", t)
+    kept: list[str] = []
+    for p in paras:
+        first = p.strip().split("\n", 1)[0].strip()
+        fl = first.lower()
+        if first.startswith("[") and (
+            "instruction" in fl
+            or "reply only" in fl
+            or "example" in fl
+            or "constraints for this turn" in fl
+        ):
+            continue
+        if "example starting sentence" in fl:
+            continue
+        kept.append(p.strip())
+    t = "\n\n".join(k for k in kept if k)
+    # Line-level: drop remaining instruction echo lines
+    lines_out: list[str] = []
+    for line in t.splitlines():
+        ls = line.strip()
+        lsl = ls.lower()
+        if ls.startswith("[") and "instruction" in lsl:
+            continue
+        if "instructions for this reply" in lsl:
+            continue
+        if lsl.startswith("example starting sentence"):
+            continue
+        lines_out.append(line)
+    return "\n".join(lines_out).strip()
+
+
 def _sanitize_model_reply(raw: str) -> str:
     t = raw.strip()
     t = _strip_outer_code_fence(t)
     t = _strip_role_prefixes(t)
     t = _remove_leakage_substrings(t)
+    t = _strip_bracketed_meta_blocks(t)
     t = _collapse_double_copy(t)
     t = _collapse_duplicate_paragraphs(t)
     t = _strip_separator_runs(t)
@@ -360,10 +456,18 @@ def generate_chat_reply(request: GenerateChatReplyRequest) -> GenerateChatReplyR
     used_checkin = bool(request.latest_checkin)
     used_plan = bool(request.active_plan) or bool(request.saved_plan_summaries)
 
-    system = _build_system_prompt()
+    system = _build_system_prompt(request.message.strip())
     user_prompt = _build_user_prompt(request)
+    msg_len = len(request.message.strip())
+    # Shorter completions for short user messages reduce “essay” replies (e.g. “hi”).
+    if msg_len <= 42:
+        max_out = 220
+    elif msg_len <= 120:
+        max_out = 360
+    else:
+        max_out = 512
     try:
-        text = generate_text(user_prompt, max_tokens=512, system=system)
+        text = generate_text(user_prompt, max_tokens=max_out, system=system)
     except (AIClientError, OSError, ValueError):
         return _fallback(request)
     except Exception:

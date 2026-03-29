@@ -147,6 +147,10 @@ class GeneratePlanRequest(BaseModel):
     plan_type: str = Field(..., min_length=1)
     user_request: str | None = None
     checkin_context: dict[str, Any]
+    burnout_context: dict[str, Any] | None = Field(
+        default=None,
+        description="Rule-based burnout snapshot from the client (same family as chat).",
+    )
     plan_context: dict[str, str] | None = None
     """User-chosen label for the plan (e.g. personal_tasks flow)."""
     plan_name: str | None = None

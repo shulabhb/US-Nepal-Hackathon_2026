@@ -3,6 +3,7 @@
  * Non-clinical — rough illustration only, not a forecast.
  */
 
+import { planChecklistProgress } from "@/lib/dashboard/plan-checklist";
 import type {
   CheckinDetailResponse,
   PlanChecklistItem,
@@ -10,6 +11,18 @@ import type {
   StoredPlan,
   UserPlanTaskInput,
 } from "@/types/api";
+
+export type BurnoutTaskProjection = {
+  hasSignal: boolean;
+  /** Same as live dashboard composite when hasSignal; still set for consistency. */
+  current: number;
+  /** If the listed workload keeps running without pacing or boundaries. */
+  ifNeglected: number;
+  /** If they follow the tailored plan (pacing + recovery in the mix). */
+  withTailoredPlan: number;
+  /** Short line for UI — workload vs capacity. */
+  loadLine: string | null;
+};
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));
@@ -62,26 +75,50 @@ function scheduleKindFromPlanRow(p: StoredPlan): "daily" | "weekly" {
   return "daily";
 }
 
+function isPlanMarkedCompleteByUser(row: StoredPlan): boolean {
+  const m = row.plan_meta;
+  if (!m || typeof m !== "object") return false;
+  return (m as Record<string, unknown>).marked_complete_by_user === true;
+}
+
+/**
+ * Plans with no remaining checklist work (or explicitly marked done) should not
+ * drive the “if not paced” scenario — avoids inflated neglect when workload is finished.
+ */
+function shouldSkipPlanForTaskProjection(p: StoredPlan): boolean {
+  if (isPlanMarkedCompleteByUser(p)) return true;
+  const { completed, total } = planChecklistProgress(p.checklist_items ?? []);
+  if (total > 0 && completed >= total) return true;
+  return false;
+}
+
+/** Task block from a single row — used for relief math on the newest plan even when it’s “closed”. */
+export function personalTasksBlockFromSinglePlan(
+  p: StoredPlan,
+): { meta: SavedPlanGenerationMeta; tasks: UserPlanTaskInput[] } | null {
+  const hit = personalTasksFromPlan(p);
+  if (hit) return hit;
+  const tasks = tasksFromChecklistFallback(p.checklist_items);
+  if (tasks.length === 0) return null;
+  const schedule_kind = scheduleKindFromPlanRow(p);
+  const meta: SavedPlanGenerationMeta = {
+    version: 1,
+    plan_type: p.plan_type,
+    schedule_kind,
+    plan_name: p.title || null,
+    generate_full_schedule: false,
+    user_tasks: tasks,
+  };
+  return { meta, tasks };
+}
+
 function latestPersonalTasksBlock(
   plans: StoredPlan[],
 ): { meta: SavedPlanGenerationMeta; tasks: UserPlanTaskInput[] } | null {
   for (const p of plans) {
-    const hit = personalTasksFromPlan(p);
-    if (hit) return hit;
-  }
-  for (const p of plans) {
-    const tasks = tasksFromChecklistFallback(p.checklist_items);
-    if (tasks.length === 0) continue;
-    const schedule_kind = scheduleKindFromPlanRow(p);
-    const meta: SavedPlanGenerationMeta = {
-      version: 1,
-      plan_type: p.plan_type,
-      schedule_kind,
-      plan_name: p.title || null,
-      generate_full_schedule: false,
-      user_tasks: tasks,
-    };
-    return { meta, tasks };
+    if (shouldSkipPlanForTaskProjection(p)) continue;
+    const block = personalTasksBlockFromSinglePlan(p);
+    if (block) return block;
   }
   return null;
 }
@@ -125,43 +162,19 @@ function dailyCapacityMinutes(energy1to10: number): number {
   return Math.round(200 + (e - 1) * 32);
 }
 
-export type BurnoutTaskProjection = {
-  hasSignal: boolean;
-  /** Same as live dashboard composite when hasSignal; still set for consistency. */
-  current: number;
-  /** If the listed workload keeps running without pacing or boundaries. */
-  ifNeglected: number;
-  /** If they follow the tailored plan (pacing + recovery in the mix). */
-  withTailoredPlan: number;
-  /** Short line for UI — workload vs capacity. */
-  loadLine: string | null;
-};
-
-/**
- * Uses the newest saved plan with `plan_meta.user_tasks`, or otherwise derives tasks from
- * `checklist_items` so preset plans and legacy saves still unlock scenario rings.
- */
-export function computeBurnoutTaskProjection(args: {
-  checkin: CheckinDetailResponse;
-  plans: StoredPlan[];
-  composite: number;
-}): BurnoutTaskProjection {
-  const block = latestPersonalTasksBlock(args.plans);
-  const current = roundScore(args.composite);
-
-  if (!block) {
-    return {
-      hasSignal: false,
-      current,
-      ifNeglected: current,
-      withTailoredPlan: current,
-      loadLine: null,
-    };
-  }
-
+/** Shared load / neglect / tailored math for a resolved task block. */
+export function projectStrainFromTaskBlock(
+  block: { meta: SavedPlanGenerationMeta; tasks: UserPlanTaskInput[] },
+  checkin: CheckinDetailResponse,
+  baselineComposite: number,
+): Pick<
+  BurnoutTaskProjection,
+  "current" | "ifNeglected" | "withTailoredPlan" | "loadLine"
+> {
+  const current = roundScore(baselineComposite);
   const { tasks, meta } = block;
-  const energy = clamp(args.checkin.energy_level ?? 5, 1, 10);
-  const stress = clamp(args.checkin.stress_level ?? 5, 1, 10);
+  const energy = clamp(checkin.energy_level ?? 5, 1, 10);
+  const stress = clamp(checkin.stress_level ?? 5, 1, 10);
   const scheduleWeekly = meta.schedule_kind === "weekly";
 
   let weightedMinutes = 0;
@@ -208,12 +221,37 @@ export function computeBurnoutTaskProjection(args: {
       : `Your task list for ${scope} is close to a doable load if you protect pacing and recovery.`;
 
   return {
-    hasSignal: true,
     current,
     ifNeglected,
     withTailoredPlan,
     loadLine,
   };
+}
+
+/**
+ * Uses the newest saved plan with `plan_meta.user_tasks`, or otherwise derives tasks from
+ * `checklist_items` so preset plans and legacy saves still unlock scenario rings.
+ */
+export function computeBurnoutTaskProjection(args: {
+  checkin: CheckinDetailResponse;
+  plans: StoredPlan[];
+  composite: number;
+}): BurnoutTaskProjection {
+  const block = latestPersonalTasksBlock(args.plans);
+  const current = roundScore(args.composite);
+
+  if (!block) {
+    return {
+      hasSignal: false,
+      current,
+      ifNeglected: current,
+      withTailoredPlan: current,
+      loadLine: null,
+    };
+  }
+
+  const out = projectStrainFromTaskBlock(block, args.checkin, args.composite);
+  return { hasSignal: true, ...out };
 }
 
 /**
@@ -247,60 +285,12 @@ export function projectStrainForProposedTasks(args: {
     user_tasks: args.tasks,
   };
 
-  const energy = clamp(args.checkin.energy_level ?? 5, 1, 10);
-  const stress = clamp(args.checkin.stress_level ?? 5, 1, 10);
-  const scheduleWeekly = meta.schedule_kind === "weekly";
-
-  let weightedMinutes = 0;
-  let highCount = 0;
-  for (const task of args.tasks) {
-    const m = parseEstimatedMinutesToNumber(task.estimated_time);
-    weightedMinutes += m * priorityWeight(task.priority);
-    if (task.priority === "high") highCount += 1;
-  }
-
-  const capDay = dailyCapacityMinutes(energy);
-  const capWindow = scheduleWeekly ? capDay * 6 : capDay;
-  const ratio = weightedMinutes / Math.max(1, capWindow);
-
-  let loadStrain = 0;
-  if (ratio < 0.72) loadStrain = 4;
-  else if (ratio < 0.92) loadStrain = 10;
-  else if (ratio < 1.12) loadStrain = 18;
-  else if (ratio < 1.38) loadStrain = 26;
-  else loadStrain = clamp(34 + (ratio - 1.38) * 28, 34, 48);
-
-  loadStrain = roundScore(loadStrain + highCount * 2);
-  const stressAmp = 1 + (stress - 5) * 0.06;
-  const neglectBump = roundScore(loadStrain * stressAmp);
-
-  const fullScheduleBonus = meta.generate_full_schedule ? 5 : 0;
-  const planRelief = roundScore(
-    clamp(10 + loadStrain * 0.38 + fullScheduleBonus, 8, 30),
+  const out = projectStrainFromTaskBlock(
+    { meta, tasks: args.tasks },
+    args.checkin,
+    args.baselineComposite,
   );
-
-  const ifNeglected = roundScore(clamp(current + neglectBump, 0, 100));
-  let withTailoredPlan = roundScore(clamp(current - planRelief, 0, 100));
-  if (withTailoredPlan >= current) {
-    withTailoredPlan = Math.max(0, current - 6);
-  }
-  if (withTailoredPlan >= ifNeglected) {
-    withTailoredPlan = clamp(ifNeglected - 8, 0, 100);
-  }
-
-  const scope = scheduleWeekly ? "this week" : "today";
-  const loadLine =
-    ratio >= 1.05
-      ? `Your listed tasks add up to a heavy ${scope} versus your current energy window—without pacing, strain can climb.`
-      : `Your task list for ${scope} is close to a doable load if you protect pacing and recovery.`;
-
-  return {
-    hasSignal: true,
-    current,
-    ifNeglected,
-    withTailoredPlan,
-    loadLine,
-  };
+  return { hasSignal: true, ...out };
 }
 
 /**

@@ -250,7 +250,7 @@ function PlanFollowThroughList({
       })}
       {overflow > 0 ? (
         <p className="mt-1 shrink-0 text-[10px] text-muted-foreground/80">
-          +{overflow} more in Plan.
+          +{overflow} more saved — newest-first, same order as the Plan tab list.
         </p>
       ) : null}
     </div>
@@ -261,12 +261,14 @@ type Props = {
   surface: OverviewSupportSurface;
   disclaimer: string;
   onNavigate: (kind: OverviewNextMoveKind) => void;
+  onPersonalizePlan: () => void;
 };
 
 export function OverviewStatusSection({
   surface,
   disclaimer,
   onNavigate,
+  onPersonalizePlan,
 }: Props) {
   const { state, friction, planFollowThroughRows, savedPlanCount, nextStep } =
     surface;
@@ -354,7 +356,7 @@ export function OverviewStatusSection({
               <PlanFollowThroughList
                 rows={planFollowThroughRows}
                 savedPlanCount={savedPlanCount}
-                onPersonalizePlan={() => onNavigate("plan")}
+                onPersonalizePlan={onPersonalizePlan}
               />
             </div>
           </div>

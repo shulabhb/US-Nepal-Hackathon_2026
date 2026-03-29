@@ -33,6 +33,22 @@ export function normalizeDashboardTab(
   return "overview";
 }
 
-export function dashboardHref(tab: DashboardTabId): string {
-  return `/dashboard?tab=${tab}`;
+/** Opens Support Chat and auto-starts the guided plan flow (see `SupportChatPanel`). */
+export const CHAT_SEED_QUICK_PLAN = "quick-plan";
+
+/**
+ * Dashboard deep link. Pass `extra` to add query pairs (e.g. `{ chatSeed: CHAT_SEED_QUICK_PLAN }` with `tab=chat`).
+ */
+export function dashboardHref(
+  tab: DashboardTabId,
+  extra?: Record<string, string>,
+): string {
+  const params = new URLSearchParams();
+  params.set("tab", tab);
+  if (extra) {
+    for (const [k, v] of Object.entries(extra)) {
+      if (v) params.set(k, v);
+    }
+  }
+  return `/dashboard?${params.toString()}`;
 }

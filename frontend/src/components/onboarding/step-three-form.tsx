@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Lock, Watch } from "lucide-react";
+import { ArrowLeft, Lock } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as React from "react";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { WearableConnectPanel } from "@/components/onboarding/wearable-connect-panel";
 import { mergeOnboardingState, readOnboardingState } from "@/lib/onboarding/storage";
 import {
   CONSISTENCY_OPTIONS,
@@ -26,6 +27,10 @@ import {
   type SleepDurationBucket,
   type SleepQualityLevel,
 } from "@/lib/onboarding/step-three";
+import type {
+  WearableProviderId,
+  WearableSimulationSnapshot,
+} from "@/lib/onboarding/wearable-simulation";
 
 function ChoiceRow({
   value,
@@ -59,6 +64,10 @@ export function StepThreeForm() {
     SleepConsistencyLevel | ""
   >("");
   const [importedFromWearable, setImportedFromWearable] = React.useState(false);
+  const [wearableProvider, setWearableProvider] =
+    React.useState<WearableProviderId | null>(null);
+  const [wearableSimulation, setWearableSimulation] =
+    React.useState<WearableSimulationSnapshot | null>(null);
 
   React.useEffect(() => {
     const s = readOnboardingState();
@@ -76,10 +85,16 @@ export function StepThreeForm() {
       setQuality(s.step3.quality);
       setConsistency(s.step3.consistency);
       setImportedFromWearable(s.step3.importedFromWearable);
+      setWearableProvider(s.step3.wearable_provider ?? null);
+      setWearableSimulation(s.step3.wearable_simulation ?? null);
     }
   }, [router]);
 
-  const clearWearableFlag = () => setImportedFromWearable(false);
+  const clearWearableFlag = () => {
+    setImportedFromWearable(false);
+    setWearableProvider(null);
+    setWearableSimulation(null);
+  };
 
   const handleDurationChange = (v: string) => {
     clearWearableFlag();
@@ -97,6 +112,8 @@ export function StepThreeForm() {
   };
 
   const applySampleWearable = () => {
+    setWearableProvider(null);
+    setWearableSimulation(null);
     setDuration(SAMPLE_WEARABLE_STEP3.duration);
     setQuality(SAMPLE_WEARABLE_STEP3.quality);
     setConsistency(SAMPLE_WEARABLE_STEP3.consistency);
@@ -112,6 +129,8 @@ export function StepThreeForm() {
       quality: quality as SleepQualityLevel,
       consistency: consistency as SleepConsistencyLevel,
       importedFromWearable,
+      wearable_provider: wearableProvider,
+      wearable_simulation: wearableSimulation,
     };
     mergeOnboardingState({ step3: payload });
     router.push("/onboarding/step-4");
@@ -172,27 +191,33 @@ export function StepThreeForm() {
           </div>
         </CardHeader>
         <CardContent className="space-10 pt-8">
-          <div className="rounded-xl border border-dashed border-border/90 bg-muted/25 px-4 py-4 sm:px-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                  <Watch className="size-4" aria-hidden />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    Optional: sample wearable data
-                  </p>
-                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                    Demo only—prefills believable sleep patterns. Not connected
-                    to Apple Watch or any device.
-                  </p>
-                </div>
-              </div>
+          <div className="space-y-4">
+            <WearableConnectPanel
+              activeProvider={wearableProvider}
+              simulation={wearableSimulation}
+              onConnect={({ provider, simulation, duration: d, quality: q, consistency: c }) => {
+                setWearableProvider(provider);
+                setWearableSimulation(simulation);
+                setDuration(d);
+                setQuality(q);
+                setConsistency(c);
+                setImportedFromWearable(true);
+              }}
+              onDisconnect={() => {
+                setWearableProvider(null);
+                setWearableSimulation(null);
+                setImportedFromWearable(false);
+              }}
+            />
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
+                Or apply a generic sample (no brand link)—same as before.
+              </p>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-9 shrink-0 self-start rounded-lg border-border/90 bg-background/80 text-xs sm:self-center"
+                className="h-9 shrink-0 rounded-lg border-border/90 bg-background/80 text-xs"
                 onClick={applySampleWearable}
               >
                 Use sample wearable data
@@ -200,10 +225,12 @@ export function StepThreeForm() {
             </div>
             {importedFromWearable ? (
               <p
-                className="mt-3 text-xs text-muted-foreground"
+                className="text-xs text-muted-foreground"
                 aria-live="polite"
               >
-                Sample values applied—you can adjust any answer below.
+                {wearableSimulation
+                  ? "Demo wearable values applied—you can adjust any answer below."
+                  : "Sample values applied—you can adjust any answer below."}
               </p>
             ) : null}
           </div>

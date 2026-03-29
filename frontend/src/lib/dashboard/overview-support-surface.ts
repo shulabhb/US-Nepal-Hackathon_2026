@@ -26,6 +26,8 @@ import {
   overviewTopDriverLine,
   pickOverviewNextMove,
 } from "@/lib/burnout/burnout-view-model";
+import { planProgressForDisplay } from "@/lib/dashboard/plan-progress-display";
+import { recentPlansForDashboard } from "@/lib/dashboard/recent-plans";
 import type {
   CheckinDetailResponse,
   PlanChecklistItem,
@@ -219,10 +221,8 @@ function buildFrictionBullets(
 function planFollowThroughRowsFromPlans(
   plans: StoredPlan[],
 ): PlanFollowThroughRow[] {
-  return plans.slice(0, 3).map((p) => {
-    const { completed, total, percent } = planChecklistProgress(
-      p.checklist_items,
-    );
+  return recentPlansForDashboard(plans).map((p) => {
+    const { completed, total, percent } = planProgressForDisplay(p);
     return {
       id: p.id,
       title: p.title?.trim() || "Saved plan",
