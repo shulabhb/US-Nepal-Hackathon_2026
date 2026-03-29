@@ -327,7 +327,13 @@ export function OverviewStatusSection({
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="h-9 rounded-lg px-2 text-sm text-muted-foreground hover:text-foreground"
+                  className={cn(
+                    "h-9 rounded-lg border px-3 text-sm shadow-sm",
+                    "border-rose-200/55 bg-rose-100/[0.42] text-rose-950/80",
+                    "hover:border-rose-300/60 hover:bg-rose-100/65 hover:text-rose-950",
+                    "dark:border-rose-400/18 dark:bg-rose-950/28 dark:text-rose-50/85",
+                    "dark:hover:border-rose-400/28 dark:hover:bg-rose-950/40 dark:hover:text-rose-50",
+                  )}
                   onClick={() => onNavigate(nextStep.backup!.kind)}
                 >
                   {nextStep.backup.label}

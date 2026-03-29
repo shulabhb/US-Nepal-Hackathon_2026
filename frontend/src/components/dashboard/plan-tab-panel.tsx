@@ -2,7 +2,6 @@
 
 import {
   AlertCircle,
-  ChevronRight,
   FolderOpen,
   Loader2,
   Plus,
@@ -270,7 +269,7 @@ type Props = {
 };
 
 export function PlanTabPanel({ checkin, anonymousId }: Props) {
-  const [planSubView, setPlanSubView] = React.useState<PlanSubView>("create");
+  const [planSubView, setPlanSubView] = React.useState<PlanSubView>("saved");
   const [planType, setPlanType] = React.useState<PlanTypeId>("personal_tasks");
   const [planContextAnswers, setPlanContextAnswers] = React.useState<
     Record<string, string>
@@ -292,9 +291,9 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
   const [saveState, setSaveState] = React.useState<SaveState>({ status: "idle" });
   const [savedPlans, setSavedPlans] = React.useState<StoredPlan[] | null>(null);
   const [savedListError, setSavedListError] = React.useState<string | null>(null);
-  const [expandedSavedId, setExpandedSavedId] = React.useState<string | null>(
-    null,
-  );
+  const [selectedSavedPlanId, setSelectedSavedPlanId] = React.useState<
+    string | null
+  >(null);
   const [checklistSyncError, setChecklistSyncError] = React.useState<
     string | null
   >(null);
@@ -333,10 +332,13 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
   }, [planType]);
 
   React.useEffect(() => {
-    if (savedPlans === null) return;
-    setExpandedSavedId((prev) => {
+    if (savedPlans === null || savedPlans.length === 0) {
+      setSelectedSavedPlanId(null);
+      return;
+    }
+    setSelectedSavedPlanId((prev) => {
       if (prev != null && savedPlans.some((p) => p.id === prev)) return prev;
-      return null;
+      return savedPlans[0]?.id ?? null;
     });
   }, [savedPlans]);
 
@@ -452,6 +454,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
         plan_meta: lastPlanMeta ?? null,
       });
       setSaveState({ status: "saved" });
+      setPlanSubView("saved");
       await loadSavedPlans();
       emitDashboardPlansMutated();
     } catch (e) {
@@ -482,8 +485,8 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
 
   const toggleSavedChecklistItem = React.useCallback(
     (index: number) => {
-      if (!expandedSavedId || !savedPlans) return;
-      const row = savedPlans.find((p) => p.id === expandedSavedId);
+      if (!selectedSavedPlanId || !savedPlans) return;
+      const row = savedPlans.find((p) => p.id === selectedSavedPlanId);
       if (!row) return;
       const prevItems = row.checklist_items.map((x) => ({ ...x }));
       const next = prevItems.map((it, j) =>
@@ -515,7 +518,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
           );
         });
     },
-    [expandedSavedId, savedPlans, anonymousId],
+    [selectedSavedPlanId, savedPlans, anonymousId],
   );
 
   const confirmAndDeletePlan = React.useCallback(
@@ -532,10 +535,13 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
       void deletePlan(row.id, anonymousId)
         .then(() => {
           setPlanActionMessage("Plan deleted.");
-          setSavedPlans((sp) => sp?.filter((p) => p.id !== row.id) ?? null);
-          if (expandedSavedId === row.id) {
-            setExpandedSavedId(null);
-          }
+          setSavedPlans((sp) => {
+            const next = sp?.filter((p) => p.id !== row.id) ?? null;
+            setSelectedSavedPlanId((sel) =>
+              sel === row.id ? next?.[0]?.id ?? null : sel,
+            );
+            return next;
+          });
           emitDashboardPlansMutated();
         })
         .catch((e) => {
@@ -544,7 +550,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
           );
         });
     },
-    [anonymousId, expandedSavedId],
+    [anonymousId],
   );
 
   if (!checkin) {
@@ -574,7 +580,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
 
   return (
     <div
-      className="mx-auto w-full max-w-2xl space-y-5 pb-6"
+      className="mx-auto w-full max-w-5xl space-y-5 pb-6"
       role="tabpanel"
       aria-label="Plan"
     >
@@ -583,7 +589,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
           Plan
         </h2>
         <p className="text-sm text-muted-foreground">
-          From your latest check-in.
+          Grounded in your check-in and priorities, with steps to ease burnout.
         </p>
       </div>
 
@@ -592,22 +598,6 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
         role="tablist"
         aria-label="Plan workspace"
       >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={planSubView === "create"}
-          id="plan-sub-create"
-          className={cn(
-            "rounded-full px-4 py-2 text-sm font-medium transition-colors",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-            planSubView === "create"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-          onClick={() => setPlanSubView("create")}
-        >
-          Create plan
-        </button>
         <button
           type="button"
           role="tab"
@@ -623,6 +613,22 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
           onClick={() => setPlanSubView("saved")}
         >
           Saved plans
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={planSubView === "create"}
+          id="plan-sub-create"
+          className={cn(
+            "rounded-full px-4 py-2 text-sm font-medium transition-colors",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            planSubView === "create"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+          onClick={() => setPlanSubView("create")}
+        >
+          Create plan
         </button>
       </div>
 
@@ -1149,7 +1155,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
               </Button>
             </div>
           ) : (
-            <div className="space-y-2">
+            <>
               {planActionMessage ? (
                 <p
                   className="text-xs text-emerald-700 dark:text-emerald-400"
@@ -1163,174 +1169,219 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
                   {planActionError}
                 </p>
               ) : null}
-              <ul className="space-y-1.5" aria-label="Saved plans list">
-                {savedPlans.map((row) => {
-                  const expanded = row.id === expandedSavedId;
-                  const toggle = () => {
-                    setExpandedSavedId((id) => (id === row.id ? null : row.id));
-                    setChecklistSyncError(null);
-                  };
-                  return (
-                    <li
-                      key={row.id}
-                      className={cn(
-                        "overflow-hidden rounded-lg border transition-colors",
-                        expanded
-                          ? "border-border bg-card/40"
-                          : "border-border/60 bg-card/30 hover:border-border",
-                      )}
-                    >
-                      <div className="relative flex gap-0.5 pr-10">
-                        <button
-                          type="button"
-                          className="flex shrink-0 items-center px-1.5 py-2.5 text-muted-foreground hover:text-foreground"
-                          aria-expanded={expanded}
-                          aria-label={expanded ? "Collapse" : "Expand"}
-                          onClick={toggle}
-                        >
-                          <ChevronRight
+              <div className="flex flex-col gap-5 md:flex-row md:items-start md:gap-0">
+                <aside
+                  className="w-full shrink-0 md:w-[13.75rem] md:border-r md:border-border/45 md:pr-4"
+                  aria-label="Plan list"
+                >
+                  <ul className="flex flex-row gap-2 overflow-x-auto pb-1 md:flex-col md:gap-1.5 md:overflow-visible md:pb-0">
+                    {savedPlans.map((row) => {
+                      const selected = row.id === selectedSavedPlanId;
+                      const { percent } = planChecklistProgress(
+                        row.checklist_items,
+                      );
+                      return (
+                        <li key={row.id} className="min-w-[11rem] shrink-0 md:min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedSavedPlanId(row.id);
+                              setChecklistSyncError(null);
+                            }}
+                            aria-current={selected ? "true" : undefined}
                             className={cn(
-                              "size-4 shrink-0 transition-transform duration-200",
-                              expanded && "rotate-90",
+                              "w-full rounded-xl border px-3 py-2.5 text-left transition-colors",
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                              selected
+                                ? "border-primary/45 bg-primary/[0.07] shadow-sm"
+                                : "border-border/55 bg-card/45 hover:border-border hover:bg-card/70",
                             )}
-                            aria-hidden
-                          />
-                        </button>
-                        <button
-                          type="button"
-                          className="min-w-0 flex-1 py-2.5 pr-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                          onClick={toggle}
-                        >
-                          <p className="text-sm font-medium leading-snug text-foreground">
-                            {row.title}
-                          </p>
-                          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                            {planTypeLabel(row.plan_type)}
-                            <span aria-hidden> · </span>
-                            <span className="whitespace-nowrap">
-                              {formatSavedAt(row.created_at)}
-                            </span>
-                          </p>
-                          {!expanded ? (
-                            <div className="mt-1.5">
-                              <PlanProgressBar
-                                items={row.checklist_items}
-                                compact
-                              />
-                            </div>
-                          ) : null}
-                        </button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-0.5 top-1.5 size-8 text-muted-foreground opacity-70 hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
-                          aria-label={`Delete ${row.title}`}
-                          onClick={(e: React.MouseEvent) => {
-                            e.stopPropagation();
-                            confirmAndDeletePlan(row);
-                          }}
-                        >
-                          <Trash2 className="size-3.5" aria-hidden />
-                        </Button>
-                      </div>
-                      {expanded ? (
-                        <div className="border-t border-border/50 px-3 pb-3 pt-2">
-                          <p className="text-sm leading-relaxed text-muted-foreground">
-                            {row.summary}
-                          </p>
-                          <p className="mt-2 text-[11px] text-muted-foreground">
-                            Horizon <span aria-hidden>·</span>{" "}
-                            {row.time_horizon}
-                          </p>
-                          {(() => {
-                            const pm = personalTasksMetaFromRow(row);
-                            if (!pm) return null;
-                            const { meta, tasks } = pm;
-                            return (
-                              <div className="mt-3 rounded-lg border border-primary/20 bg-primary/[0.04] px-3 py-2.5">
-                                <p className="text-[11px] font-medium text-primary">
-                                  Your time inputs (saved)
-                                </p>
-                                {meta.schedule_kind ? (
-                                  <p className="mt-1 text-[11px] text-muted-foreground">
-                                    Scope:{" "}
-                                    {meta.schedule_kind === "daily"
-                                      ? "Daily"
-                                      : "Weekly"}
-                                    {meta.generate_full_schedule
-                                      ? " · full schedule requested"
-                                      : null}
-                                  </p>
-                                ) : null}
-                                <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                                  {tasks.map((ut, i) => (
-                                    <li key={i}>
-                                      <span className="font-medium text-foreground">
-                                        {ut.name}
-                                      </span>
-                                      <span aria-hidden> · </span>
-                                      {ut.priority} priority
-                                      {ut.estimated_time ? (
-                                        <>
-                                          <span aria-hidden> · </span>
-                                          {ut.estimated_time}
-                                        </>
-                                      ) : (
-                                        <span className="opacity-80">
-                                          {" "}
-                                          · no time estimate
-                                        </span>
-                                      )}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            );
-                          })()}
-                          <div className="mt-3">
-                            <PlanProgressBar items={row.checklist_items} />
-                          </div>
-                          {checklistSyncError ? (
-                            <p
-                              className="mt-1.5 text-xs text-destructive"
-                              role="alert"
-                            >
-                              {checklistSyncError}
+                          >
+                            <p className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
+                              {row.title}
                             </p>
-                          ) : null}
-                          <div className="mt-3">
-                            <PlanTaskList
-                              items={row.checklist_items}
-                              interactive
-                              onToggleChecklistItem={toggleSavedChecklistItem}
-                            />
-                          </div>
-                          {row.notes?.length ? (
-                            <div className="mt-3">
-                              <p className="mb-1 text-[11px] font-medium text-muted-foreground">
-                                Notes
-                              </p>
-                              <ul className="list-disc space-y-0.5 pl-4 text-xs leading-relaxed text-muted-foreground">
-                                {row.notes.map((n, i) => (
-                                  <li key={i}>{n}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          ) : null}
-                          <p className="mt-3 text-[10px] text-muted-foreground/60">
-                            {row.source} · {row.model ?? "—"}
-                          </p>
-                        </div>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+                            <p className="mt-1 text-[10px] text-muted-foreground">
+                              <span className="tabular-nums font-medium text-foreground/90">
+                                {percent}%
+                              </span>
+                              <span aria-hidden> · </span>
+                              <span className="line-clamp-1">
+                                {planTypeLabel(row.plan_type)}
+                              </span>
+                            </p>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 hidden w-full gap-1.5 rounded-xl md:flex"
+                    onClick={() => setPlanSubView("create")}
+                  >
+                    <Plus className="size-3.5" aria-hidden />
+                    New plan
+                  </Button>
+                </aside>
+
+                <div className="min-w-0 flex-1 md:pl-5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mb-4 gap-1.5 rounded-xl md:hidden"
+                    onClick={() => setPlanSubView("create")}
+                  >
+                    <Plus className="size-3.5" aria-hidden />
+                    New plan
+                  </Button>
+                  {(() => {
+                    const row = savedPlans.find(
+                      (p) => p.id === selectedSavedPlanId,
+                    );
+                    if (!row) {
+                      return (
+                        <p className="text-sm text-muted-foreground">
+                          Select a plan from the list.
+                        </p>
+                      );
+                    }
+                    return (
+                      <SavedPlanDetailView
+                        row={row}
+                        onDelete={confirmAndDeletePlan}
+                        checklistSyncError={checklistSyncError}
+                        onToggleChecklistItem={toggleSavedChecklistItem}
+                      />
+                    );
+                  })()}
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function SavedPlanDetailView({
+  row,
+  onDelete,
+  checklistSyncError,
+  onToggleChecklistItem,
+}: {
+  row: StoredPlan;
+  onDelete: (row: StoredPlan) => void;
+  checklistSyncError: string | null;
+  onToggleChecklistItem: (index: number) => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-card/50 p-4 shadow-sm sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h3
+            id={`saved-plan-${row.id}-title`}
+            className="font-heading text-lg font-semibold leading-snug text-foreground"
+          >
+            {row.title}
+          </h3>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {planTypeLabel(row.plan_type)}
+            <span aria-hidden> · </span>
+            <span className="whitespace-nowrap">
+              {formatSavedAt(row.created_at)}
+            </span>
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-9 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          aria-label={`Delete ${row.title}`}
+          onClick={() => onDelete(row)}
+        >
+          <Trash2 className="size-4" aria-hidden />
+        </Button>
+      </div>
+
+      <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+        {row.summary}
+      </p>
+      <p className="mt-2 text-[11px] text-muted-foreground">
+        Horizon <span aria-hidden>·</span> {row.time_horizon}
+      </p>
+
+      {(() => {
+        const pm = personalTasksMetaFromRow(row);
+        if (!pm) return null;
+        const { meta, tasks } = pm;
+        return (
+          <div className="mt-3 rounded-lg border border-primary/20 bg-primary/[0.04] px-3 py-2.5">
+            <p className="text-[11px] font-medium text-primary">
+              Your time inputs (saved)
+            </p>
+            {meta.schedule_kind ? (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Scope:{" "}
+                {meta.schedule_kind === "daily" ? "Daily" : "Weekly"}
+                {meta.generate_full_schedule ? " · full schedule requested" : null}
+              </p>
+            ) : null}
+            <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+              {tasks.map((ut, i) => (
+                <li key={i}>
+                  <span className="font-medium text-foreground">{ut.name}</span>
+                  <span aria-hidden> · </span>
+                  {ut.priority} priority
+                  {ut.estimated_time ? (
+                    <>
+                      <span aria-hidden> · </span>
+                      {ut.estimated_time}
+                    </>
+                  ) : (
+                    <span className="opacity-80"> · no time estimate</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
+
+      <div className="mt-4">
+        <PlanProgressBar items={row.checklist_items} />
+      </div>
+      {checklistSyncError ? (
+        <p className="mt-1.5 text-xs text-destructive" role="alert">
+          {checklistSyncError}
+        </p>
+      ) : null}
+      <div className="mt-3">
+        <PlanTaskList
+          items={row.checklist_items}
+          interactive
+          onToggleChecklistItem={onToggleChecklistItem}
+        />
+      </div>
+      {row.notes?.length ? (
+        <div className="mt-3">
+          <p className="mb-1 text-[11px] font-medium text-muted-foreground">
+            Notes
+          </p>
+          <ul className="list-disc space-y-0.5 pl-4 text-xs leading-relaxed text-muted-foreground">
+            {row.notes.map((n, i) => (
+              <li key={i}>{n}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <p className="mt-4 text-[10px] text-muted-foreground/60">
+        {row.source} · {row.model ?? "—"}
+      </p>
     </div>
   );
 }

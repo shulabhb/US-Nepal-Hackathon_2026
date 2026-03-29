@@ -6,7 +6,7 @@ import { LANDING_CHECKIN_CTA, LANDING_HOW_IT_WORKS } from "@/lib/landing-copy";
 import { LANDING_IDS } from "@/lib/landing-ids";
 import { cn } from "@/lib/utils";
 
-import { ProductPreviewCard } from "./product-preview-card";
+import { LandingDashboardMock } from "./landing-dashboard-mock";
 
 export function HeroSection() {
   return (
@@ -72,7 +72,7 @@ export function HeroSection() {
           </ul>
         </div>
         <div className="mt-12 flex justify-center lg:mt-0 lg:justify-end">
-          <ProductPreviewCard className="w-full sm:max-w-md" />
+          <LandingDashboardMock className="w-full sm:max-w-xl lg:max-w-3xl" />
         </div>
       </div>
     </section>

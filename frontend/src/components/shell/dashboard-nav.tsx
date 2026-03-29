@@ -5,11 +5,7 @@ import Link from "next/link";
 import type { DashboardTabId } from "@/lib/dashboard/dashboard-tab";
 import { dashboardHref } from "@/lib/dashboard/dashboard-tab";
 import { Button } from "@/components/ui/button";
-import {
-  CHECKIN_AGAIN_BUTTON,
-  CHECKIN_INVITE,
-  CHECKIN_RECHECK_PROMPT,
-} from "@/lib/app-copy";
+import { CHECKIN_AGAIN_BUTTON, CHECKIN_INVITE } from "@/lib/app-copy";
 import { cn } from "@/lib/utils";
 
 const PRIMARY_TABS: { id: DashboardTabId; label: string }[] = [
@@ -92,22 +88,15 @@ export function DashboardNav({
 
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {variant === "full" && onRetake ? (
-            <div className="flex max-w-[16rem] flex-col items-end gap-1 sm:max-w-[18rem]">
-              {hasSavedCheckin ? (
-                <p className="text-right text-[10px] leading-snug text-muted-foreground sm:text-[11px]">
-                  {CHECKIN_RECHECK_PROMPT}
-                </p>
-              ) : null}
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 shrink-0 rounded-lg text-xs text-muted-foreground"
-                onClick={onRetake}
-              >
-                {hasSavedCheckin ? CHECKIN_AGAIN_BUTTON : CHECKIN_INVITE}
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 shrink-0 rounded-lg text-xs text-muted-foreground"
+              onClick={onRetake}
+            >
+              {hasSavedCheckin ? CHECKIN_AGAIN_BUTTON : CHECKIN_INVITE}
+            </Button>
           ) : null}
           <Button
             asChild

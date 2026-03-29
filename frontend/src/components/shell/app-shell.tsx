@@ -7,7 +7,7 @@ type Props = {
   navVariant?: "full" | "minimal";
   activeTab?: DashboardTabId;
   onRetake?: () => void;
-  /** When false, nav shows “Add a check-in”; when true, recheck prompt + “Check in again”. */
+  /** When false, nav shows “Add a check-in”; when true, “Check in again”. */
   hasSavedCheckin?: boolean;
   className?: string;
   /**
