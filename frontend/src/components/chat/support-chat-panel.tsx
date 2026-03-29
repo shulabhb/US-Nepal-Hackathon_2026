@@ -39,7 +39,7 @@ import {
 import {
   buildActivePlanContext,
   buildBurnoutChatContext,
-  buildLatestCheckinPayload,
+  buildChatCheckinPayload,
   buildSavedPlanSummaries,
 } from "@/lib/dashboard/chat-context";
 import {
@@ -678,7 +678,7 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
           const data = await generateChatReply({
             anonymous_id: anonymousId,
             message: trimmed,
-            latest_checkin: buildLatestCheckinPayload(checkin),
+            latest_checkin: buildChatCheckinPayload(checkin),
             active_plan:
               list[0] != null ? buildActivePlanContext(list[0]) : null,
             saved_plan_summaries: buildSavedPlanSummaries(list, true),
@@ -686,7 +686,7 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
             conversation_history: historyForApi,
             session_context: {
               note:
-                "Replies use read-only context. They do not automatically update saved check-ins, profile data, or stored plans.",
+                "Replies use read-only context. They do not automatically update saved check-ins, profile data, or stored plans. When the user asks for next steps, priorities, or task help, weigh their saved plan checklist (and any user_tasks_from_generation) together with check-in and burnout—not the latest check-in alone.",
             },
           });
 

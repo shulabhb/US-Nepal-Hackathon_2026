@@ -206,9 +206,10 @@ Rules:
 Burnout + plan context (when provided in a separate JSON block):
 - Use it lightly: only weave in details when they directly help answer what the user said. Do not recap their whole snapshot on every turn.
 - The “burnout_context” object is a rule-based in-app signal (band, score, drivers, trends)—not clinical.
-- If strain is higher or recovery/depletion leads, prefer calmer, shorter suggestions; fewer new commitments; more rest and pacing.
+- Balance signals: the latest check-in captures symptoms, sleep, and goals; the Primary plan captures their concrete checklist and any “open_tasks” or “user_tasks_from_generation”. For questions about what to do next, steps, or priorities, weigh plan tasks and next_unfinished_task together with check-in strain and burnout—do not anchor only on check-in history or snapshot.
+- If strain is higher or recovery/depletion leads, prefer calmer, shorter suggestions; fewer new commitments; more rest and pacing—still tie advice to real open tasks when a plan exists (smaller slices, deferrals, or one sub-step), rather than inventing unrelated busywork.
 - If strain is lower and an active plan exists, you may be slightly more action-forward when they ask for next steps—still gentle.
-- When “next_unfinished_task” exists and they ask what to do next, favor that task or a smaller slice—offer to simplify if it feels big.
+- When “next_unfinished_task” or “open_tasks” exists and they ask what to do next, favor those items or a smaller slice—offer to simplify if it feels big.
 - If they want things easier, weigh strain and plan load: scale back before adding work.
 - If burnout_context is missing, use check-in and plan JSON only with the same guardrails.""" + _dynamic_system_suffix(
         user_message
@@ -245,14 +246,16 @@ def _build_user_prompt(req: GenerateChatReplyRequest) -> str:
 
     return f"""Context for this turn (reference only; do not recite headings or JSON labels to the user):
 
---- Check-in ---
-{checkin_block}
+When suggesting steps or priorities, balance Primary plan tasks (open_tasks, checklist, next_unfinished_task) with Check-in and Burnout—not check-in alone.
 
 --- Burnout (rule-based app snapshot; not a diagnosis) ---
 {burnout_block}
 
---- Primary plan ---
+--- Primary plan (saved checklist / tasks for this user) ---
 {plan_block}
+
+--- Latest check-in (symptoms, sleep, goals; raw onboarding JSON omitted here) ---
+{checkin_block}
 
 --- Other plan summaries ---
 {summaries_block}
