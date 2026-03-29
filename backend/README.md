@@ -55,7 +55,7 @@ Start the model server, pull a model if needed, then call the API. Typical failu
 |--------|------|--------|
 | GET | `/health` | Liveness |
 | POST | `/checkins` | Insert check-in |
-| GET | `/checkins/{anonymous_id}` | Latest check-in or **404** |
+| GET | `/checkins/{anonymous_id}` | Latest check-in, or **JSON `null`** (HTTP 200) if none |
 | GET | `/checkins/{anonymous_id}/history` | Up to **5** rows, newest first |
 | DELETE | `/checkins/{anonymous_id}/device-data` | Delete all check-ins and plans for that id |
 | POST | `/ai/plan/generate` | Structured plan JSON (local model) |

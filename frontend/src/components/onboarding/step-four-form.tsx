@@ -16,6 +16,10 @@ import {
 import { Label } from "@/components/ui/label";
 import type { OnboardingStep4 } from "@/lib/onboarding/step-four";
 import { emptyStep4 } from "@/lib/onboarding/step-four";
+import {
+  useTourFormFieldsLocked,
+  useTourSubmit,
+} from "@/components/tour/guided-tour-provider";
 import { mergeOnboardingState, readOnboardingState } from "@/lib/onboarding/storage";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +36,8 @@ function newRow(): RowState {
 type MigrationChoice = "" | "yes" | "no";
 
 export function StepFourForm() {
+  const tourSubmit = useTourSubmit("onboarding-4");
+  const fieldsLocked = useTourFormFieldsLocked("onboarding-4");
   const router = useRouter();
   const [gateOpen, setGateOpen] = React.useState(false);
   const [countryOfBirth, setCountryOfBirth] = React.useState("");
@@ -126,7 +132,9 @@ export function StepFourForm() {
 
   const handleSkip = () => {
     setAttemptedSubmit(false);
-    goStepFive(emptyStep4());
+    tourSubmit(() => {
+      goStepFive(emptyStep4());
+    });
   };
 
   const handleContinue = () => {
@@ -135,7 +143,9 @@ export function StepFourForm() {
       return;
     }
     setAttemptedSubmit(false);
-    goStepFive(buildStep4Payload());
+    tourSubmit(() => {
+      goStepFive(buildStep4Payload());
+    });
   };
 
   const addRow = () => {
@@ -190,6 +200,13 @@ export function StepFourForm() {
         </p>
       </div>
 
+      <div
+        data-tour="onboarding-form"
+        className={cn(
+          "transition-shadow duration-300",
+          fieldsLocked && "pointer-events-none select-none",
+        )}
+      >
       <Card className="border-border/80 bg-card/90 shadow-sm backdrop-blur-sm">
         <CardHeader className="space-y-4 border-b border-border/60 pb-6">
           <p className="inline-flex items-center gap-2 text-xs font-medium text-primary">
@@ -408,7 +425,10 @@ export function StepFourForm() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-border/60 pt-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div
+            className="flex flex-col gap-3 border-t border-border/60 pt-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
+            data-tour-submit
+          >
             <Button
               type="button"
               variant="ghost"
@@ -435,6 +455,7 @@ export function StepFourForm() {
           </p>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

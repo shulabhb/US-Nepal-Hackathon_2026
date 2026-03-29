@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { SupportChatPanelHandle } from "@/components/chat/support-chat-panel";
 import { SupportChatPanel } from "@/components/chat/support-chat-panel";
+import { DashboardTourBridge } from "@/components/tour/dashboard-tour-bridge";
 import { BurnoutSummarySection } from "@/components/dashboard/burnout-summary-section";
 import { BurnoutCheckinSnapshotSection } from "@/components/dashboard/burnout-checkin-snapshot-section";
 import { PlanTabPanel } from "@/components/dashboard/plan-tab-panel";
@@ -29,6 +30,7 @@ import {
   clearAnonymousId,
   getOrCreateAnonymousId,
 } from "@/lib/onboarding/anonymous-id";
+import { clearWorkspaceTutorialState } from "@/lib/onboarding/tutorial-storage";
 import { clearOnboardingState } from "@/lib/onboarding/storage";
 import type { CheckinDetailResponse } from "@/types/api";
 
@@ -144,6 +146,7 @@ export function DashboardClient() {
     try {
       await deleteDeviceData(getOrCreateAnonymousId());
       clearOnboardingState();
+      clearWorkspaceTutorialState();
       clearAnonymousId();
       emitDashboardPlansMutated();
       router.push("/");
@@ -233,6 +236,7 @@ export function DashboardClient() {
       resetDeviceDataBusy={resetDeviceDataBusy}
       viewportFill={activeTab === "chat"}
     >
+      <DashboardTourBridge />
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div
           className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_75%_45%_at_50%_-8%,oklch(0.76_0.06_215_/0.11),transparent),radial-gradient(ellipse_50%_40%_at_100%_35%,oklch(0.55_0.04_250_/0.05),transparent)]"
@@ -288,6 +292,7 @@ export function DashboardClient() {
 
             {activeTab === "burnout" ? (
               <div
+                data-tour="dashboard-burnout-root"
                 className="w-full space-y-8"
                 role="tabpanel"
                 aria-label="Burnout"

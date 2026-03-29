@@ -17,6 +17,12 @@ import {
 import { Label } from "@/components/ui/label";
 import type { OnboardingStep5 } from "@/lib/onboarding/step-five";
 import { emptyStep5 } from "@/lib/onboarding/step-five";
+import {
+  useTourFormFieldsLocked,
+  useTourSubmit,
+} from "@/components/tour/guided-tour-provider";
+import { PENDING_DASHBOARD_TOUR_SESSION_KEY } from "@/lib/onboarding/dashboard-tour-config";
+import { GUIDED_TOUR_SESSION_KEY } from "@/lib/onboarding/guided-tour-config";
 import { dashboardHref } from "@/lib/dashboard/dashboard-tab";
 import {
   mergeOnboardingState,
@@ -26,6 +32,8 @@ import { syncCheckinFromCompletedOnboarding } from "@/lib/onboarding/sync-checki
 import { cn } from "@/lib/utils";
 
 export function StepFiveForm() {
+  const tourSubmit = useTourSubmit("onboarding-5b");
+  const fieldsLocked = useTourFormFieldsLocked("onboarding-5b");
   const router = useRouter();
   const [gateOpen, setGateOpen] = React.useState(false);
   const [medications, setMedications] = React.useState("");
@@ -103,12 +111,20 @@ export function StepFiveForm() {
       setSyncError(result.error);
       return;
     }
+    try {
+      sessionStorage.removeItem(GUIDED_TOUR_SESSION_KEY);
+      sessionStorage.setItem(PENDING_DASHBOARD_TOUR_SESSION_KEY, "1");
+    } catch {
+      /* ignore */
+    }
     router.replace(dashboardHref("overview"));
   };
 
   const handleSkip = () => {
     setAttemptedSubmit(false);
-    void finishToDashboard(emptyStep5());
+    tourSubmit(() => {
+      void finishToDashboard(emptyStep5());
+    });
   };
 
   const handleContinue = () => {
@@ -117,7 +133,9 @@ export function StepFiveForm() {
       return;
     }
     setAttemptedSubmit(false);
-    void finishToDashboard(buildStep5Payload());
+    tourSubmit(() => {
+      void finishToDashboard(buildStep5Payload());
+    });
   };
 
   if (!gateOpen || !hydrated) {
@@ -155,6 +173,13 @@ export function StepFiveForm() {
         </p>
       </div>
 
+      <div
+        data-tour="onboarding-form"
+        className={cn(
+          "transition-shadow duration-300",
+          fieldsLocked && "pointer-events-none select-none",
+        )}
+      >
       <Card className="border-border/80 bg-card/90 shadow-sm backdrop-blur-sm">
         <CardHeader className="space-y-4 border-b border-border/60 pb-6">
           <p className="inline-flex items-center gap-2 text-xs font-medium text-primary">
@@ -300,7 +325,10 @@ export function StepFiveForm() {
             </p>
           ) : null}
 
-          <div className="flex flex-col gap-3 border-t border-border/60 pt-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div
+            className="flex flex-col gap-3 border-t border-border/60 pt-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
+            data-tour-submit
+          >
             <Button
               type="button"
               variant="ghost"
@@ -321,6 +349,7 @@ export function StepFiveForm() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

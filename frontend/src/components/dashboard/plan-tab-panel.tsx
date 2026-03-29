@@ -21,6 +21,8 @@ import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StrainRingGauge } from "@/components/dashboard/strain-ring-gauge";
+import { useGuidedTour } from "@/components/tour/guided-tour-provider";
+import { TourRichLine } from "@/components/tour/tour-rich-line";
 import { Label } from "@/components/ui/label";
 import {
   buildPlanCheckinContext,
@@ -52,6 +54,11 @@ import {
   CHAT_SEED_QUICK_PLAN,
   dashboardHref,
 } from "@/lib/dashboard/dashboard-tab";
+import {
+  DASHBOARD_TOUR_STEPS,
+  isPlanTourGuidanceSegment,
+  isPlanWorkspaceTourStep,
+} from "@/lib/onboarding/dashboard-tour-config";
 import {
   DASHBOARD_RECENT_PLANS_LIMIT,
   recentPlansForDashboard,
@@ -342,6 +349,40 @@ function PlanTaskList({
   );
 }
 
+function PlanTourGuidanceBanner({ stepIndex }: { stepIndex: number }) {
+  const step = DASHBOARD_TOUR_STEPS[stepIndex];
+  if (!step) return null;
+  const isRead = step.tourMode === "read";
+  const guidanceSpotlight =
+    step.highlight === "dashboard-plan-guidance-active" && isRead;
+  return (
+    <div
+      className={cn(
+        "pointer-events-none mb-4 min-h-[148px] rounded-[1.25rem] border p-4 shadow-sm transition-[border-color,background-color,opacity] duration-200 sm:p-5",
+        isRead
+          ? "border-sky-500/35 bg-gradient-to-br from-sky-500/[0.09] via-card/60 to-card/95 shadow-[0_20px_52px_-28px_rgba(15,23,42,0.28)] ring-1 ring-sky-500/20"
+          : "border-border/70 bg-muted/35 opacity-95 ring-1 ring-border/35",
+      )}
+      data-tour={
+        guidanceSpotlight ? "dashboard-plan-guidance-active" : undefined
+      }
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">
+        {isRead ? "Guidance" : "Your turn"}
+      </p>
+      <p className="mt-1.5 font-heading text-sm font-semibold text-foreground">
+        {step.title}
+      </p>
+      <div className="mt-2">
+        <TourRichLine
+          text={step.body}
+          className="text-[13px] text-muted-foreground/95 sm:text-sm"
+        />
+      </div>
+    </div>
+  );
+}
+
 type GeneratePanelState =
   | { status: "idle" }
   | { status: "generating" }
@@ -360,6 +401,20 @@ type Props = {
 
 export function PlanTabPanel({ checkin, anonymousId }: Props) {
   const router = useRouter();
+  const guidedTour = useGuidedTour();
+  const planTourStepId =
+    guidedTour?.isActive && guidedTour.phase === "dashboard"
+      ? (DASHBOARD_TOUR_STEPS[guidedTour.stepIndex]?.id ?? null)
+      : null;
+  const planTourWorkspace =
+    guidedTour?.isActive === true &&
+    guidedTour.phase === "dashboard" &&
+    isPlanWorkspaceTourStep(guidedTour.stepIndex);
+  const showPlanGuidanceBanner =
+    guidedTour != null &&
+    planTourWorkspace &&
+    planTourStepId != null &&
+    isPlanTourGuidanceSegment(guidedTour.stepIndex);
   const [planSubView, setPlanSubView] = React.useState<PlanSubView>("saved");
   const [planType, setPlanType] = React.useState<PlanTypeId>("personal_tasks");
   const [planContextAnswers, setPlanContextAnswers] = React.useState<
@@ -738,6 +793,66 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
     [anonymousId],
   );
 
+  const advanceAfterGenRef = React.useRef(false);
+  const sawPlanGeneratingRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (panel.status === "generating") {
+      sawPlanGeneratingRef.current = true;
+    }
+  }, [panel.status]);
+
+  React.useEffect(() => {
+    if (!checkin) return;
+    if (!guidedTour?.isActive || guidedTour.phase !== "dashboard") return;
+    const id = DASHBOARD_TOUR_STEPS[guidedTour.stepIndex]?.id;
+    if (!id) return;
+    if (id === "nav-plan" || id.startsWith("plan-")) {
+      setPlanType("personal_tasks");
+    }
+    const createSteps = new Set<string>([
+      "plan-read-type",
+      "plan-field-type",
+      "plan-read-name",
+      "plan-field-name",
+      "plan-read-schedule",
+      "plan-field-schedule",
+      "plan-read-tasks",
+      "plan-field-tasks",
+      "plan-read-notes",
+      "plan-field-notes",
+      "plan-read-generate",
+      "plan-field-generate",
+      "plan-read-result",
+      "plan-field-checklist",
+      "plan-read-download",
+      "plan-field-download",
+      "plan-read-save",
+      "plan-field-save",
+    ]);
+    if (createSteps.has(id)) {
+      setPlanSubView("create");
+    }
+  }, [checkin, guidedTour?.isActive, guidedTour?.phase, guidedTour?.stepIndex]);
+
+  React.useEffect(() => {
+    if (!checkin) return;
+    if (!guidedTour?.isActive || guidedTour.phase !== "dashboard") return;
+    const id = DASHBOARD_TOUR_STEPS[guidedTour.stepIndex]?.id;
+    if (id !== "plan-field-generate") {
+      advanceAfterGenRef.current = false;
+      sawPlanGeneratingRef.current = false;
+      return;
+    }
+    if (!lastGenerated) return;
+    if (panel.status === "generating") return;
+    if (!sawPlanGeneratingRef.current) return;
+    if (advanceAfterGenRef.current) return;
+    advanceAfterGenRef.current = true;
+    sawPlanGeneratingRef.current = false;
+    guidedTour.advanceDashboardStep();
+  }, [checkin, lastGenerated, guidedTour, panel.status]);
+
   if (!checkin) {
     return (
       <div className="mx-auto max-w-xl space-y-4" role="tabpanel" aria-label="Plan">
@@ -784,10 +899,15 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
         </p>
       </div>
 
+      {showPlanGuidanceBanner && guidedTour ? (
+        <PlanTourGuidanceBanner stepIndex={guidedTour.stepIndex} />
+      ) : null}
+
       <div
         className="inline-flex rounded-full border border-border/70 bg-muted/30 p-0.5 shadow-sm"
         role="tablist"
         aria-label="Plan workspace"
+        data-tour="dashboard-plan-subview-tabs"
       >
         <button
           type="button"
@@ -853,7 +973,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
                 </CardTitle>
               </CardHeader>
             <CardContent className="space-y-3 pt-0">
-              <div className="space-y-2">
+              <div className="space-y-2" data-tour="dashboard-plan-field-type">
                 <Label htmlFor="plan-type" className="text-sm font-medium">
                   Plan type
                 </Label>
@@ -874,7 +994,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
 
               {planType === "personal_tasks" ? (
                 <div className="space-y-4 rounded-lg border border-border/50 bg-muted/15 px-3 py-3">
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5" data-tour="dashboard-plan-field-name">
                     <Label
                       htmlFor="plan-display-name"
                       className="text-sm font-medium"
@@ -893,7 +1013,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
                     />
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2" data-tour="dashboard-plan-field-schedule">
                     <span className="text-sm font-medium">
                       Schedule <span className="text-destructive">*</span>
                     </span>
@@ -946,7 +1066,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
                         Add task
                       </Button>
                     </div>
-                    <ul className="space-y-3">
+                    <ul className="space-y-3" data-tour="dashboard-plan-field-tasks">
                       {draftTasks.map((task, index) => (
                         <li
                           key={task.localId}
@@ -1158,7 +1278,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
                 </div>
               )}
 
-              <div className="space-y-1.5">
+              <div className="space-y-1.5" data-tour="dashboard-plan-field-notes">
                 <Label htmlFor="plan-request" className="text-sm font-medium">
                   Notes <span className="font-normal text-muted-foreground">(optional)</span>
                 </Label>
@@ -1183,14 +1303,16 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
                 </p>
               ) : null}
 
-              <Button
-                type="button"
-                className="h-10 w-full rounded-xl sm:w-auto sm:min-w-[160px]"
-                disabled={!contextOk}
-                onClick={() => void runGenerate()}
-              >
-                Generate plan
-              </Button>
+              <div data-tour="dashboard-plan-field-generate">
+                <Button
+                  type="button"
+                  className="h-10 w-full rounded-xl sm:w-auto sm:min-w-[160px]"
+                  disabled={!contextOk}
+                  onClick={() => void runGenerate()}
+                >
+                  Generate plan
+                </Button>
+              </div>
 
               {panel.status === "error" ? (
                 <div
@@ -1229,7 +1351,10 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
               interactiveChecklist
               onToggleChecklistItem={toggleFreshChecklistItem}
               primaryActions={
-                <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className="flex flex-wrap items-center gap-2"
+                  data-tour="dashboard-plan-field-save"
+                >
                   <Button
                     type="button"
                     className="rounded-xl"
@@ -1963,7 +2088,7 @@ function GeneratedPlanCard({
         </div>
 
         {primaryActions ? <div>{primaryActions}</div> : null}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" data-tour="dashboard-plan-download">
           <Button
             type="button"
             variant="outline"
@@ -1985,7 +2110,7 @@ function GeneratedPlanCard({
         </div>
         {afterPrimaryActions ? <div>{afterPrimaryActions}</div> : null}
 
-        <div>
+        <div data-tour="dashboard-plan-checklist">
           <PlanTaskList
             items={plan.checklist_items}
             interactive={interactiveChecklist}

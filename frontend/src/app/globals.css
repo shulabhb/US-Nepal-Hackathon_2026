@@ -48,6 +48,28 @@
   --radius-4xl: calc(var(--radius) * 2.6);
   --animate-hero-feature-flip: hero-feature-flip 0.22s cubic-bezier(0.33, 1, 0.68, 1)
     both;
+  --animate-guided-tour-next-pulse: guided-tour-next-pulse 2.25s ease-in-out infinite;
+  --animate-guided-tour-next-breathe: guided-tour-next-breathe 2.1s ease-in-out infinite;
+}
+
+@keyframes guided-tour-next-breathe {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.14);
+  }
+}
+
+@keyframes guided-tour-next-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 oklch(0.43 0.09 215 / 0.42);
+  }
+  55% {
+    box-shadow: 0 0 0 11px oklch(0.43 0.09 215 / 0);
+  }
 }
 
 @keyframes hero-feature-flip {

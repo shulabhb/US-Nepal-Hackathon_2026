@@ -26,7 +26,12 @@ import {
   mergeOnboardingState,
   readOnboardingState,
 } from "@/lib/onboarding/storage";
+import {
+  useTourFormFieldsLocked,
+  useTourSubmit,
+} from "@/components/tour/guided-tour-provider";
 import { dashboardHref } from "@/lib/dashboard/dashboard-tab";
+import { cn } from "@/lib/utils";
 
 function MultiRow({
   id,
@@ -63,6 +68,8 @@ function toggleInList(list: string[], value: string, on: boolean): string[] {
 }
 
 export function StepOneForm() {
+  const tourSubmit = useTourSubmit("onboarding-1");
+  const fieldsLocked = useTourFormFieldsLocked("onboarding-1");
   const router = useRouter();
   const [exitTarget, setExitTarget] = React.useState<
     "loading" | "home" | "dashboard"
@@ -118,23 +125,25 @@ export function StepOneForm() {
 
   const handleContinue = () => {
     if (!isComplete) return;
-    mergeOnboardingState({
-      step1: {
-        roles,
-        role_other_text: roles.includes("other")
-          ? roleOther.trim() || null
-          : null,
-        pressures,
-        pressure_other_text: pressures.includes("other")
-          ? pressureOther.trim() || null
-          : null,
-        help_needs: helpNeeds,
-        help_other_text: helpNeeds.includes("other")
-          ? helpOther.trim() || null
-          : null,
-      },
+    tourSubmit(() => {
+      mergeOnboardingState({
+        step1: {
+          roles,
+          role_other_text: roles.includes("other")
+            ? roleOther.trim() || null
+            : null,
+          pressures,
+          pressure_other_text: pressures.includes("other")
+            ? pressureOther.trim() || null
+            : null,
+          help_needs: helpNeeds,
+          help_other_text: helpNeeds.includes("other")
+            ? helpOther.trim() || null
+            : null,
+        },
+      });
+      router.push("/onboarding/step-2");
     });
-    router.push("/onboarding/step-2");
   };
 
   return (
@@ -169,6 +178,13 @@ export function StepOneForm() {
         </p>
       </div>
 
+      <div
+        data-tour="onboarding-form"
+        className={cn(
+          "transition-shadow duration-300",
+          fieldsLocked && "pointer-events-none select-none",
+        )}
+      >
       <Card className="border-border/80 bg-card/90 shadow-sm backdrop-blur-sm">
         <CardHeader className="space-y-4 border-b border-border/60 pb-6">
           <p className="inline-flex items-center gap-2 text-xs font-medium text-primary">
@@ -300,7 +316,10 @@ export function StepOneForm() {
             ) : null}
           </fieldset>
 
-          <div className="flex flex-col gap-3 border-t border-border/60 pt-8 sm:flex-row sm:items-center sm:justify-between">
+          <div
+            className="flex flex-col gap-3 border-t border-border/60 pt-8 sm:flex-row sm:items-center sm:justify-between"
+            data-tour-submit
+          >
             <p
               className="text-sm text-muted-foreground"
               id="continue-hint"
@@ -322,6 +341,7 @@ export function StepOneForm() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

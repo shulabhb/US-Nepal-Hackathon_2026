@@ -59,6 +59,7 @@ function OverviewStatusAndNoticingCard({
 }) {
   return (
     <div
+      data-tour="dashboard-how-now"
       className={cn(
         "rounded-xl border border-border/45 bg-muted/[0.04] px-4 py-5 ring-1 ring-black/[0.02]",
         "sm:px-5 sm:py-5",
@@ -193,6 +194,7 @@ function PlanFollowThroughList({
           type="button"
           size="sm"
           variant="default"
+          data-tour="dashboard-personalize"
           className={cn(PAIR_PRIMARY_BTN, "mt-3 w-full shrink-0 sm:w-auto")}
           onClick={onPersonalizePlan}
         >
@@ -298,6 +300,7 @@ export function OverviewStatusSection({
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start lg:gap-5">
           <div className="flex min-w-0 flex-col gap-0">
             <div
+              data-tour="dashboard-next-best"
               className={cn(
                 "flex flex-col overflow-hidden rounded-xl border border-primary/18 bg-primary/[0.04] px-3 py-3",
                 "shadow-sm shadow-black/[0.03] sm:px-4 sm:py-4",
@@ -345,6 +348,7 @@ export function OverviewStatusSection({
           </div>
 
           <div
+            data-tour="dashboard-no-plans"
             className={cn(
               "flex flex-col overflow-hidden rounded-xl border border-primary/18 bg-primary/[0.04] px-3 py-3",
               "shadow-sm shadow-black/[0.03] sm:px-4 sm:py-4",

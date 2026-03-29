@@ -32,6 +32,7 @@ const items = [
 export function TrustStrip() {
   return (
     <section
+      data-tour="landing-trust"
       className="border-b border-border/60 bg-muted/35"
       aria-labelledby="trust-heading"
     >

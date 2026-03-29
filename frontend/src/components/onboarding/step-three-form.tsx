@@ -16,7 +16,12 @@ import {
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { WearableConnectPanel } from "@/components/onboarding/wearable-connect-panel";
+import {
+  useTourFormFieldsLocked,
+  useTourSubmit,
+} from "@/components/tour/guided-tour-provider";
 import { mergeOnboardingState, readOnboardingState } from "@/lib/onboarding/storage";
+import { cn } from "@/lib/utils";
 import {
   CONSISTENCY_OPTIONS,
   DURATION_OPTIONS,
@@ -56,6 +61,8 @@ function ChoiceRow({
 }
 
 export function StepThreeForm() {
+  const tourSubmit = useTourSubmit("onboarding-3");
+  const fieldsLocked = useTourFormFieldsLocked("onboarding-3");
   const router = useRouter();
   const [gateOpen, setGateOpen] = React.useState(false);
   const [duration, setDuration] = React.useState<SleepDurationBucket | "">("");
@@ -124,16 +131,18 @@ export function StepThreeForm() {
 
   const handleContinue = () => {
     if (!isComplete) return;
-    const payload: OnboardingStep3 = {
-      duration: duration as SleepDurationBucket,
-      quality: quality as SleepQualityLevel,
-      consistency: consistency as SleepConsistencyLevel,
-      importedFromWearable,
-      wearable_provider: wearableProvider,
-      wearable_simulation: wearableSimulation,
-    };
-    mergeOnboardingState({ step3: payload });
-    router.push("/onboarding/step-4");
+    tourSubmit(() => {
+      const payload: OnboardingStep3 = {
+        duration: duration as SleepDurationBucket,
+        quality: quality as SleepQualityLevel,
+        consistency: consistency as SleepConsistencyLevel,
+        importedFromWearable,
+        wearable_provider: wearableProvider,
+        wearable_simulation: wearableSimulation,
+      };
+      mergeOnboardingState({ step3: payload });
+      router.push("/onboarding/step-4");
+    });
   };
 
   if (!gateOpen) {
@@ -174,6 +183,13 @@ export function StepThreeForm() {
         </p>
       </div>
 
+      <div
+        data-tour="onboarding-form"
+        className={cn(
+          "transition-shadow duration-300",
+          fieldsLocked && "pointer-events-none select-none",
+        )}
+      >
       <Card className="border-border/80 bg-card/90 shadow-sm backdrop-blur-sm">
         <CardHeader className="space-y-4 border-b border-border/60 pb-6">
           <p className="inline-flex items-center gap-2 text-xs font-medium text-primary">
@@ -241,7 +257,7 @@ export function StepThreeForm() {
             </legend>
             <RadioGroup
               name="onboarding-sleep-duration"
-              value={duration || undefined}
+              value={duration}
               onValueChange={handleDurationChange}
               className="grid gap-2"
               required
@@ -264,7 +280,7 @@ export function StepThreeForm() {
             </legend>
             <RadioGroup
               name="onboarding-sleep-quality"
-              value={quality || undefined}
+              value={quality}
               onValueChange={handleQualityChange}
               className="grid gap-2 sm:grid-cols-1"
               required
@@ -287,7 +303,7 @@ export function StepThreeForm() {
             </legend>
             <RadioGroup
               name="onboarding-sleep-consistency"
-              value={consistency || undefined}
+              value={consistency}
               onValueChange={handleConsistencyChange}
               className="grid gap-2"
               required
@@ -304,7 +320,10 @@ export function StepThreeForm() {
             </RadioGroup>
           </fieldset>
 
-          <div className="flex flex-col gap-3 border-t border-border/60 pt-8 sm:flex-row sm:items-center sm:justify-between">
+          <div
+            className="flex flex-col gap-3 border-t border-border/60 pt-8 sm:flex-row sm:items-center sm:justify-between"
+            data-tour-submit
+          >
             <p
               className="text-sm text-muted-foreground"
               id="step3-continue-hint"
@@ -328,6 +347,7 @@ export function StepThreeForm() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 import { HeroFeatureFlip } from "./hero-feature-flip";
 import { LandingDashboardMock } from "./landing-dashboard-mock";
+import { LandingTourButton } from "./landing-tour-button";
 
 export function HeroSection() {
   return (
@@ -20,7 +21,7 @@ export function HeroSection() {
         aria-hidden
       />
       <div className="relative mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:grid lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-12 lg:px-8 lg:py-24">
-        <div>
+        <div data-tour="landing-hero">
           <HeroFeatureFlip />
           <h1
             id="hero-heading"
@@ -41,6 +42,7 @@ export function HeroSection() {
             >
               {LANDING_CHECKIN_CTA}
             </Link>
+            <LandingTourButton />
             <a
               href={`#${LANDING_IDS.howItWorks}`}
               className={cn(
@@ -82,7 +84,10 @@ export function HeroSection() {
             </p>
           </div>
         </div>
-        <div className="mt-10 flex justify-center lg:mt-0 lg:justify-end lg:pl-2">
+        <div
+          className="mt-10 flex justify-center lg:mt-0 lg:justify-end lg:pl-2"
+          data-tour="landing-mock"
+        >
           <LandingDashboardMock className="w-full max-w-none sm:max-w-none lg:max-w-[36rem]" />
         </div>
       </div>

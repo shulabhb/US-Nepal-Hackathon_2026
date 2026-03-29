@@ -34,6 +34,7 @@ export function HowItWorksSection() {
   return (
     <section
       id={LANDING_IDS.howItWorks}
+      data-tour="landing-how"
       className="border-b border-border/60"
       aria-labelledby="how-heading"
     >

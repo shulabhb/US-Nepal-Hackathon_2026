@@ -23,6 +23,7 @@ import {
   useState,
 } from "react";
 
+import { useGuidedTour } from "@/components/tour/guided-tour-provider";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -150,6 +151,7 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
     ref,
   ) {
     const baseId = useId();
+    const tour = useGuidedTour();
     const threadEndRef = useRef<HTMLDivElement>(null);
     const composerRef = useRef<HTMLTextAreaElement>(null);
     const wasSendingRef = useRef(false);
@@ -893,6 +895,7 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
 
         {/* (2) Only vertical scroll container in this workspace */}
         <div
+          data-tour="dashboard-chat-thread"
           className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch]"
           role="region"
           aria-label="Chat messages"
@@ -917,7 +920,11 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
                       <p className="mt-3 border-t border-border/45 pt-3 whitespace-normal">
                         <Link
                           href={dashboardHref("plan")}
+                          data-tour="dashboard-chat-plan-link"
                           className="font-medium text-primary underline decoration-primary/35 underline-offset-[3px] transition-colors hover:text-primary/90 hover:decoration-primary/70"
+                          onClick={() => {
+                            tour?.syncDashboardAfterPlanLinkClick();
+                          }}
                         >
                           Open Plan page
                         </Link>
@@ -953,7 +960,10 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
         </div>
 
         {/* (3) Fixed composer — flex sibling, not sticky; parent column bounds height */}
-        <footer className="shrink-0 border-t border-border/50 bg-background pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-4px_20px_-6px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_20px_-6px_rgba(0,0,0,0.25)]">
+        <footer
+          data-tour="dashboard-chat-composer"
+          className="shrink-0 border-t border-border/50 bg-background pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-4px_20px_-6px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_20px_-6px_rgba(0,0,0,0.25)]"
+        >
           <div className="mx-auto w-full max-w-2xl px-3 sm:px-4">
             <p
               id={`${baseId}-quick-label`}

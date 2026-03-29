@@ -16,6 +16,10 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
+  useTourFormFieldsLocked,
+  useTourSubmit,
+} from "@/components/tour/guided-tour-provider";
+import {
   mergeOnboardingState,
   readOnboardingState,
 } from "@/lib/onboarding/storage";
@@ -128,6 +132,8 @@ function TenPointSlider({
 }
 
 export function StepTwoForm() {
+  const tourSubmit = useTourSubmit("onboarding-2");
+  const fieldsLocked = useTourFormFieldsLocked("onboarding-2");
   const router = useRouter();
   const [gateOpen, setGateOpen] = React.useState(false);
   const [symptoms, setSymptoms] = React.useState<OnboardingSymptom[]>([]);
@@ -162,14 +168,16 @@ export function StepTwoForm() {
 
   const handleContinue = () => {
     if (!isComplete || stressLevel === null || energyLevel === null) return;
-    mergeOnboardingState({
-      step2: {
-        symptoms,
-        stressLevel,
-        energyLevel,
-      },
+    tourSubmit(() => {
+      mergeOnboardingState({
+        step2: {
+          symptoms,
+          stressLevel,
+          energyLevel,
+        },
+      });
+      router.push("/onboarding/step-3");
     });
-    router.push("/onboarding/step-3");
   };
 
   if (!gateOpen) {
@@ -210,6 +218,13 @@ export function StepTwoForm() {
         </p>
       </div>
 
+      <div
+        data-tour="onboarding-form"
+        className={cn(
+          "transition-shadow duration-300",
+          fieldsLocked && "pointer-events-none select-none",
+        )}
+      >
       <Card className="border-border/80 bg-card/90 shadow-sm backdrop-blur-sm">
         <CardHeader className="space-y-4 border-b border-border/60 pb-6">
           <p className="inline-flex items-center gap-2 text-xs font-medium text-primary">
@@ -273,7 +288,10 @@ export function StepTwoForm() {
             highLabel="energized"
           />
 
-          <div className="flex flex-col gap-3 border-t border-border/60 pt-8 sm:flex-row sm:items-center sm:justify-between">
+          <div
+            className="flex flex-col gap-3 border-t border-border/60 pt-8 sm:flex-row sm:items-center sm:justify-between"
+            data-tour-submit
+          >
             <p
               className="text-sm text-muted-foreground"
               id="step2-continue-hint"
@@ -297,6 +315,7 @@ export function StepTwoForm() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

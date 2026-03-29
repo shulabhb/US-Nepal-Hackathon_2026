@@ -253,7 +253,7 @@ export function BurnoutInsightTabs({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-tour="dashboard-burnout-insight-tabs">
       <div className="border-b border-border/40 pb-3">
         <h3 className="font-heading text-base font-semibold text-foreground">
           Break it down

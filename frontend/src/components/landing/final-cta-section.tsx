@@ -31,6 +31,7 @@ export function FinalCtaSection() {
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <Link
               href="/onboarding"
+              data-tour="landing-checkin-cta"
               className={cn(
                 buttonVariants({ variant: "default", size: "lg" }),
                 "h-11 min-h-11 w-full min-w-[14rem] justify-center rounded-xl px-8 text-base font-semibold shadow-sm sm:w-auto",

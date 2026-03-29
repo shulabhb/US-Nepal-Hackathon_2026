@@ -46,6 +46,7 @@ export function FeatureHighlightsSection() {
   return (
     <section
       id={LANDING_IDS.features}
+      data-tour="landing-features"
       className="border-b border-border/60"
       aria-labelledby="features-heading"
     >

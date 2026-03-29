@@ -73,6 +73,7 @@ function TabNav({
             key={id}
             href={href}
             scroll={false}
+            data-tour={`nav-tab-${id}`}
             role="tab"
             aria-selected={isActive}
             className={cn(
@@ -149,6 +150,7 @@ function AppHeaderInner({
             type="button"
             variant="ghost"
             size="icon"
+            data-tour="dashboard-erase"
             className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
             aria-label="Reset this device"
             aria-describedby="reset-device-help"
@@ -240,6 +242,7 @@ function AppHeaderFallback({
                 key={id}
                 href={href}
                 scroll={false}
+                data-tour={`nav-tab-${id}`}
                 role="tab"
                 aria-selected={false}
                 className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"

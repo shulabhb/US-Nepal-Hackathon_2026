@@ -80,12 +80,20 @@ export async function getLatestCheckin(
   const enc = encodeURIComponent(anonymousId);
   const res = await fetch(`${base}/checkins/${enc}`, { method: "GET" });
 
+  if (res.status === 404) {
+    throw new Error("No check-in found for this id.");
+  }
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error(formatErrorBody(res.status, text));
   }
 
-  return (await res.json()) as CheckinDetailResponse;
+  const data: unknown = await res.json();
+  if (data === null) {
+    throw new Error("No check-in found for this id.");
+  }
+  return data as CheckinDetailResponse;
 }
 
 /**
@@ -111,7 +119,11 @@ export async function getLatestCheckinMaybe(
     throw new Error(formatErrorBody(res.status, text));
   }
 
-  return (await res.json()) as CheckinDetailResponse;
+  const data: unknown = await res.json();
+  if (data === null) {
+    return null;
+  }
+  return data as CheckinDetailResponse;
 }
 
 /**

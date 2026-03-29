@@ -3,7 +3,9 @@
 import { ChevronDown } from "lucide-react";
 import * as React from "react";
 
+import { useGuidedTour } from "@/components/tour/guided-tour-provider";
 import { CheckinsTabPanel } from "@/components/dashboard/checkins-tab-panel";
+import { DASHBOARD_TOUR_STEPS } from "@/lib/onboarding/dashboard-tour-config";
 import { riskLabelFromSnapshot } from "@/lib/dashboard/checkin-view-model";
 import { cn } from "@/lib/utils";
 import type { CheckinDetailResponse } from "@/types/api";
@@ -27,6 +29,21 @@ export function BurnoutCheckinSnapshotSection({
 }: Props) {
   const [open, setOpen] = React.useState(false);
   const hint = collapsedHint(checkin);
+  const tour = useGuidedTour();
+  const tourStepId =
+    tour?.isActive && tour.phase === "dashboard"
+      ? (DASHBOARD_TOUR_STEPS[tour.stepIndex]?.id ?? null)
+      : null;
+
+  React.useLayoutEffect(() => {
+    if (tourStepId === "burnout-snapshot-expanded") {
+      setOpen(true);
+      return;
+    }
+    if (tourStepId === "burnout-snapshot-collapsed") {
+      setOpen(false);
+    }
+  }, [tourStepId]);
 
   return (
     <section className="overflow-hidden rounded-2xl border border-border/55 bg-card/40 shadow-sm">
@@ -35,6 +52,7 @@ export function BurnoutCheckinSnapshotSection({
         aria-expanded={open}
         id="burnout-snapshot-toggle"
         aria-controls="burnout-snapshot-panel"
+        data-tour="dashboard-burnout-snapshot-toggle"
         className={cn(
           "flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors",
           "hover:bg-muted/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
@@ -74,6 +92,7 @@ export function BurnoutCheckinSnapshotSection({
           id="burnout-snapshot-panel"
           role="region"
           aria-labelledby="burnout-snapshot-toggle"
+          data-tour="dashboard-burnout-snapshot-panel"
           className="border-t border-border/50 px-3 pb-4 pt-2 sm:px-4"
         >
           <CheckinsTabPanel

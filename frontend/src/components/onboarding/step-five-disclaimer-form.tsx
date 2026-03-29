@@ -13,7 +13,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  useTourFormFieldsLocked,
+  useTourSubmit,
+} from "@/components/tour/guided-tour-provider";
+import { PENDING_DASHBOARD_TOUR_SESSION_KEY } from "@/lib/onboarding/dashboard-tour-config";
+import { GUIDED_TOUR_SESSION_KEY } from "@/lib/onboarding/guided-tour-config";
 import { dashboardHref } from "@/lib/dashboard/dashboard-tab";
+import { cn } from "@/lib/utils";
 import { emptyStep5 } from "@/lib/onboarding/step-five";
 import {
   mergeOnboardingState,
@@ -22,6 +29,8 @@ import {
 import { syncCheckinFromCompletedOnboarding } from "@/lib/onboarding/sync-checkin-from-onboarding";
 
 export function StepFiveDisclaimerForm() {
+  const tourSubmit = useTourSubmit("onboarding-5a");
+  const fieldsLocked = useTourFormFieldsLocked("onboarding-5a");
   const router = useRouter();
   const [gateOpen, setGateOpen] = React.useState(false);
   const [finishing, setFinishing] = React.useState(false);
@@ -53,27 +62,37 @@ export function StepFiveDisclaimerForm() {
   }, [router]);
 
   const handleDecline = () => {
-    mergeOnboardingState({
-      step5: emptyStep5(),
-      _pending_sensitive_additional: null,
-      _sensitive_step_questions: null,
+    tourSubmit(() => {
+      mergeOnboardingState({
+        step5: emptyStep5(),
+        _pending_sensitive_additional: null,
+        _sensitive_step_questions: null,
+      });
+      setSyncError(null);
+      setFinishing(true);
+      void (async () => {
+        const result = await syncCheckinFromCompletedOnboarding();
+        setFinishing(false);
+        if (!result.ok) {
+          setSyncError(result.error);
+          return;
+        }
+        try {
+          sessionStorage.removeItem(GUIDED_TOUR_SESSION_KEY);
+          sessionStorage.setItem(PENDING_DASHBOARD_TOUR_SESSION_KEY, "1");
+        } catch {
+          /* ignore */
+        }
+        router.replace(dashboardHref("overview"));
+      })();
     });
-    setSyncError(null);
-    setFinishing(true);
-    void (async () => {
-      const result = await syncCheckinFromCompletedOnboarding();
-      setFinishing(false);
-      if (!result.ok) {
-        setSyncError(result.error);
-        return;
-      }
-      router.replace(dashboardHref("overview"));
-    })();
   };
 
   const handleAccept = () => {
-    mergeOnboardingState({ _sensitive_step_questions: true });
-    router.push("/onboarding/step-5/questions");
+    tourSubmit(() => {
+      mergeOnboardingState({ _sensitive_step_questions: true });
+      router.push("/onboarding/step-5/questions");
+    });
   };
 
   if (!gateOpen) {
@@ -111,6 +130,13 @@ export function StepFiveDisclaimerForm() {
         </p>
       </div>
 
+      <div
+        data-tour="onboarding-form"
+        className={cn(
+          "transition-shadow duration-300",
+          fieldsLocked && "pointer-events-none select-none",
+        )}
+      >
       <Card className="border-border/80 bg-card/90 shadow-sm backdrop-blur-sm">
         <CardHeader className="space-y-4 border-b border-border/60 pb-6">
           <p className="inline-flex items-center gap-2 text-xs font-medium text-primary">
@@ -145,7 +171,10 @@ export function StepFiveDisclaimerForm() {
             </p>
           ) : null}
 
-          <div className="flex flex-col gap-3 border-t border-border/60 pt-6 sm:flex-row sm:flex-wrap sm:items-stretch sm:justify-between">
+          <div
+            className="flex flex-col gap-3 border-t border-border/60 pt-6 sm:flex-row sm:flex-wrap sm:items-stretch sm:justify-between"
+            data-tour-submit
+          >
             <Button
               type="button"
               variant="ghost"
@@ -166,6 +195,7 @@ export function StepFiveDisclaimerForm() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

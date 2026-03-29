@@ -331,7 +331,7 @@ export function DashboardOverviewBurnout({
   const pairDimmed = allMetersLocked || projectionPairLocked;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-tour="dashboard-welcome">
       {/* What helps now — full-width horizontal band */}
       <section
         className={cn(
@@ -445,6 +445,7 @@ export function DashboardOverviewBurnout({
                       }
                     >
                       <div
+                        data-tour="dashboard-meters-now"
                         className={cn(
                           "shrink-0 transition-[opacity,filter] duration-200",
                           allMetersLocked &&
@@ -463,7 +464,10 @@ export function DashboardOverviewBurnout({
                         />
                       </div>
 
-                      <div className="relative flex shrink-0 flex-nowrap items-start gap-x-4 sm:gap-x-6 md:gap-x-7">
+                      <div
+                        className="relative flex shrink-0 flex-nowrap items-start gap-x-4 sm:gap-x-6 md:gap-x-7"
+                        data-tour="dashboard-meters-locked"
+                      >
                         <div
                           className={cn(
                             "shrink-0 transition-[opacity,filter] duration-200",
@@ -569,7 +573,10 @@ export function DashboardOverviewBurnout({
             </ul>
           ) : null}
           {showStrainUi || !hasCheckin ? (
-          <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-4">
+          <ul
+            className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-4"
+            data-tour="dashboard-what-helps"
+          >
             <li className="min-w-0">
               <button
                 type="button"

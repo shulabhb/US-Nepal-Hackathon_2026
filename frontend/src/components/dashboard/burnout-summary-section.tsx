@@ -166,7 +166,10 @@ export function BurnoutSummarySection({ checkin, anonymousId }: Props) {
         ) : (
           <>
             <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:gap-8">
-              <div className="relative flex size-36 shrink-0 items-center justify-center sm:size-40">
+              <div
+                className="relative flex size-36 shrink-0 items-center justify-center sm:size-40"
+                data-tour="dashboard-burnout-strain-dial"
+              >
                 <svg
                   className={cn(
                     "size-full -rotate-90",
@@ -238,7 +241,7 @@ export function BurnoutSummarySection({ checkin, anonymousId }: Props) {
       {planContextReady ? (
         <>
           {/* Linear meter — quick scan */}
-          <div className="space-y-2">
+          <div className="space-y-2" data-tour="dashboard-burnout-strain-meter">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Strain meter</span>
               {model.previousComposite != null ? (

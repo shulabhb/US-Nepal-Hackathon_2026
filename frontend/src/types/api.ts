@@ -61,7 +61,7 @@ export type CheckinCreatePayload = {
   client_context?: Record<string, unknown> | null;
 };
 
-/** Latest stored row — GET /checkins/{anonymous_id}. */
+/** Latest stored row — GET /checkins/{anonymous_id} (JSON `null` when none). */
 export type CheckinDetailResponse = {
   id: string;
   anonymous_id: string;

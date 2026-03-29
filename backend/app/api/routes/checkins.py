@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException
 
 from app.schemas.checkin import (
@@ -73,9 +75,9 @@ def list_checkin_history(anonymous_id: str) -> list[CheckinDetailResponse]:
         ) from exc
 
 
-@router.get("/{anonymous_id}", response_model=CheckinDetailResponse)
-def get_checkin(anonymous_id: str) -> CheckinDetailResponse:
-    """Latest full check-in row for this opaque client id."""
+@router.get("/{anonymous_id}", response_model=Optional[CheckinDetailResponse])
+def get_checkin(anonymous_id: str) -> Optional[CheckinDetailResponse]:
+    """Latest full check-in row for this opaque client id, or JSON null if none."""
     aid = anonymous_id.strip()
     if not aid:
         raise HTTPException(status_code=400, detail="anonymous_id is required.")
@@ -87,11 +89,5 @@ def get_checkin(anonymous_id: str) -> CheckinDetailResponse:
             status_code=503,
             detail=str(exc),
         ) from exc
-
-    if row is None:
-        raise HTTPException(
-            status_code=404,
-            detail="No check-in found for this id.",
-        )
 
     return row
