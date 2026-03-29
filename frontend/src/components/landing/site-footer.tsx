@@ -13,8 +13,9 @@ export function SiteFooter() {
             Burnout Radar
           </p>
           <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-            Early burnout signal—anonymous check-in, optional sleep context, and
-            clear next steps.
+            Anonymous check-in → private burnout readout and strain rings on a
+            dashboard with tailored plans, contextual support chat, full Burnout
+            detail, and check-ins you can repeat—not a replacement for care.
           </p>
         </div>
         <p className="text-xs leading-relaxed text-muted-foreground">

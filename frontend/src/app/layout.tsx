@@ -25,11 +25,12 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Burnout Radar — Early burnout support, anonymous by default",
+    default:
+      "Burnout Radar — Private burnout snapshot, plan, chat, and check-ins",
     template: "%s · Burnout Radar",
   },
   description:
-    "An anonymous early-support tool that helps students and young professionals detect rising burnout risk using essential self-reported signals and optional sleep tracking—then offers practical next-step recommendations.",
+    "Anonymous, on-device check-in turns into a private burnout readout: strain rings, dimensions, and plain language—not a diagnosis. Then use one workspace for a tailored plan with tasks, support chat grounded in your snapshot, a full Burnout view with history, and check-ins again when life shifts. Optional sleep context. Students and early-career friendly.",
 };
 
 export default function RootLayout({

@@ -10,22 +10,22 @@ const items = [
   {
     icon: ShieldCheck,
     title: "Anonymous-first",
-    body: "Share only what makes the snapshot useful.",
+    body: "No real name; session data stays tied to this browser’s anonymous ID.",
   },
   {
     icon: MoonStar,
-    title: "Sleep-aware",
-    body: "Optional rhythm when you want extra nuance.",
+    title: "Sleep in the mix",
+    body: "Optional sleep fields inform the same snapshot that drives rings and Plan.",
   },
   {
     icon: ArrowUpRight,
-    title: "Early signal",
-    body: "Flags strain while it’s still easier to adjust.",
+    title: "Strain you can see",
+    body: "Composite-style rings and bands visualize load—not a medical readout.",
   },
   {
     icon: BookOpen,
-    title: "Concrete steps",
-    body: "Short list you can act on this week.",
+    title: "Plan + chat + history",
+    body: "Checklists and tasks, contextual support chat, and a Burnout tab for depth and past check-ins.",
   },
 ] as const;
 
@@ -45,7 +45,7 @@ export function TrustStrip() {
               id="trust-heading"
               className="font-heading mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
             >
-              Private snapshot. Simple next moves.
+              Check-in once; keep working the dashboard.
             </h2>
           </div>
           <Sparkles

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from pydantic import ValidationError
@@ -134,11 +135,38 @@ Tasks they want included (respect all; order by priority then your judgment for 
 """
 
 
+# Opaque client / row IDs must never appear in user-facing titles.
+# Match standard UUIDs and 8-4-4-12 (e.g. some anonymous ids).
+_UUID_RE = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    r"|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+    re.IGNORECASE,
+)
+
+
+def _sanitize_generated_title(title: str, plan_name: str | None) -> str:
+    """Strip UUIDs and stray 'for <id>' tails the model may emit; never empty."""
+    s = (title or "").strip()
+    s = _UUID_RE.sub("", s)
+    s = re.sub(
+        r"\s+for\s*[!\s,–—-]*$",
+        "",
+        s,
+        flags=re.IGNORECASE,
+    )
+    s = re.sub(r"[\s,–—-]+[!?]*$", "", s).strip()
+    s = re.sub(r"\s{2,}", " ", s)
+    if len(s) < 3:
+        pn = (plan_name or "").strip()
+        if len(pn) >= 3:
+            return pn[:200]
+        return "Your plan"
+    return s[:200]
+
+
 def _build_prompt(req: GeneratePlanRequest) -> str:
     ctx_json = json.dumps(req.checkin_context, indent=2, ensure_ascii=False)
     extras = ""
-    if req.anonymous_id:
-        extras += f"\nClient anonymous id (opaque): {req.anonymous_id}\n"
     if req.user_request and req.user_request.strip():
         extras += f"\nUser focus / request:\n{req.user_request.strip()}\n"
     plan_ctx_block = ""
@@ -179,7 +207,7 @@ Check-in context (JSON):
 {ctx_json}
 
 Requirements:
-- title: short, encouraging (if a user plan name was given, prefer incorporating it)
+- title: short, encouraging (if a user plan name was given, prefer incorporating it). Never include UUIDs, hex ids, "anonymous", or any opaque client identifier—titles are shown to humans only.
 - plan_type: repeat or refine "{req.plan_type}" as a short label
 - summary: 2–4 sentences, concrete and kind; mention pacing/rest if full schedule was requested; for personal daily/weekly plans, briefly reflect time/load realism.
 - time_horizon: must match {"this single day" if (req.schedule_kind == "daily") else "this week" if (req.schedule_kind == "weekly") else "the checklist"} — e.g. "today", "this week"
@@ -228,6 +256,10 @@ def generate_plan(request: GeneratePlanRequest) -> GeneratePlanResponse:
         raise PlanStructureValidationError(
             f"Model output failed plan validation: {exc.errors()[:5]}"
         ) from exc
+
+    safe_title = _sanitize_generated_title(plan.title, request.plan_name)
+    if safe_title != plan.title:
+        plan = plan.model_copy(update={"title": safe_title})
 
     return GeneratePlanResponse(
         plan=plan,

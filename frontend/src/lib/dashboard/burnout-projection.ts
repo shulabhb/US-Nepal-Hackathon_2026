@@ -215,3 +215,118 @@ export function computeBurnoutTaskProjection(args: {
     loadLine,
   };
 }
+
+/**
+ * Same load math as saved-plan projection, but for a draft (e.g. chat-built plan before save).
+ * `baselineComposite` should match the live rule-based overview strain (0–100).
+ */
+export function projectStrainForProposedTasks(args: {
+  checkin: CheckinDetailResponse;
+  baselineComposite: number;
+  tasks: UserPlanTaskInput[];
+  schedule_kind: "daily" | "weekly";
+  generate_full_schedule: boolean;
+}): BurnoutTaskProjection {
+  const current = roundScore(args.baselineComposite);
+  if (args.tasks.length === 0) {
+    return {
+      hasSignal: false,
+      current,
+      ifNeglected: current,
+      withTailoredPlan: current,
+      loadLine: null,
+    };
+  }
+
+  const meta: SavedPlanGenerationMeta = {
+    version: 1,
+    plan_type: "personal_tasks",
+    schedule_kind: args.schedule_kind,
+    plan_name: null,
+    generate_full_schedule: args.generate_full_schedule,
+    user_tasks: args.tasks,
+  };
+
+  const energy = clamp(args.checkin.energy_level ?? 5, 1, 10);
+  const stress = clamp(args.checkin.stress_level ?? 5, 1, 10);
+  const scheduleWeekly = meta.schedule_kind === "weekly";
+
+  let weightedMinutes = 0;
+  let highCount = 0;
+  for (const task of args.tasks) {
+    const m = parseEstimatedMinutesToNumber(task.estimated_time);
+    weightedMinutes += m * priorityWeight(task.priority);
+    if (task.priority === "high") highCount += 1;
+  }
+
+  const capDay = dailyCapacityMinutes(energy);
+  const capWindow = scheduleWeekly ? capDay * 6 : capDay;
+  const ratio = weightedMinutes / Math.max(1, capWindow);
+
+  let loadStrain = 0;
+  if (ratio < 0.72) loadStrain = 4;
+  else if (ratio < 0.92) loadStrain = 10;
+  else if (ratio < 1.12) loadStrain = 18;
+  else if (ratio < 1.38) loadStrain = 26;
+  else loadStrain = clamp(34 + (ratio - 1.38) * 28, 34, 48);
+
+  loadStrain = roundScore(loadStrain + highCount * 2);
+  const stressAmp = 1 + (stress - 5) * 0.06;
+  const neglectBump = roundScore(loadStrain * stressAmp);
+
+  const fullScheduleBonus = meta.generate_full_schedule ? 5 : 0;
+  const planRelief = roundScore(
+    clamp(10 + loadStrain * 0.38 + fullScheduleBonus, 8, 30),
+  );
+
+  const ifNeglected = roundScore(clamp(current + neglectBump, 0, 100));
+  let withTailoredPlan = roundScore(clamp(current - planRelief, 0, 100));
+  if (withTailoredPlan >= current) {
+    withTailoredPlan = Math.max(0, current - 6);
+  }
+  if (withTailoredPlan >= ifNeglected) {
+    withTailoredPlan = clamp(ifNeglected - 8, 0, 100);
+  }
+
+  const scope = scheduleWeekly ? "this week" : "today";
+  const loadLine =
+    ratio >= 1.05
+      ? `Your listed tasks add up to a heavy ${scope} versus your current energy window—without pacing, strain can climb.`
+      : `Your task list for ${scope} is close to a doable load if you protect pacing and recovery.`;
+
+  return {
+    hasSignal: true,
+    current,
+    ifNeglected,
+    withTailoredPlan,
+    loadLine,
+  };
+}
+
+/**
+ * Rough illustrative strain if recovery/wellness checklist items are dropped (non-clinical).
+ */
+export function projectStrainIfStrippingRecovery(args: {
+  checkin: CheckinDetailResponse;
+  baselineComposite: number;
+  checklistItems: PlanChecklistItem[];
+}): { baseline: number; stripped: number; line: string } {
+  const baseline = roundScore(args.baselineComposite);
+  const labels = args.checklistItems.map((i) =>
+    `${i.label ?? ""} ${i.description ?? ""}`.toLowerCase(),
+  );
+  const recoveryHints =
+    /\b(rest|recovery|wellness|walk|stretch|meditat|sleep|breathe|break|hydrat|calm|unwind|social|connect)\b/;
+  const recoveryish = labels.filter((t) => recoveryHints.test(t)).length;
+  const fraction =
+    args.checklistItems.length > 0
+      ? recoveryish / args.checklistItems.length
+      : 0;
+  const bump = roundScore(clamp(6 + fraction * 28 + baseline * 0.08, 6, 42));
+  const stripped = roundScore(clamp(baseline + bump, 0, 100));
+  const line =
+    recoveryish > 0
+      ? `Removing softer recovery-style steps (${recoveryish} in this draft) often raises the same rule-based readout because those steps buffer load.`
+      : "This draft already leans work-heavy—trimming further usually asks more of your stress window.";
+  return { baseline, stripped, line };
+}

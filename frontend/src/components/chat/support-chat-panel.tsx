@@ -24,15 +24,55 @@ import {
 
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
-import { generateChatReply } from "@/lib/api/ai";
+import {
+  buildPlanCheckinContext,
+  generateChatReply,
+  generatePlan,
+} from "@/lib/api/ai";
 import { getCheckinHistory } from "@/lib/api/checkins";
-import { getPlans } from "@/lib/api/plans";
+import {
+  emitDashboardPlansMutated,
+  getPlans,
+  savePlan,
+} from "@/lib/api/plans";
 import {
   buildActivePlanContext,
   buildBurnoutChatContext,
   buildLatestCheckinPayload,
   buildSavedPlanSummaries,
 } from "@/lib/dashboard/chat-context";
+import {
+  applyChecklistEditFromChatMessage,
+  formatChecklistPreviewLines,
+  wantsFullPlanRegenerate,
+} from "@/lib/dashboard/chat-plan-checklist-edit";
+import {
+  buildSavedMetaForChatGenerate,
+  formatPlanTypeMenu,
+  formatPresetFieldQuestion,
+  messageStartsPlanFlow,
+  normalizePresetAnswer,
+  optionalNotesPrompt,
+  parsePersonalTaskLines,
+  parsePlanTypeId,
+  parseScheduleKind,
+  parseSelectChoice,
+  parseYesNo,
+  summarizeGeneratedPlan,
+  wantsCancelFlow,
+  wantsConfirmRisk,
+  wantsKeepPlanInstead,
+  wantsSavePlanReply,
+  wantsStripRecoveryOrLightenLoad,
+  type ChatPlanSession,
+  type PendingChatGenerate,
+} from "@/lib/dashboard/chat-plan-flow";
+import { projectStrainIfStrippingRecovery } from "@/lib/dashboard/burnout-projection";
+import {
+  buildPlanContextPayload,
+  fieldsForPlanType,
+  hasEnoughPlanContext,
+} from "@/lib/dashboard/plan-context-fields";
 import { planChecklistProgress } from "@/lib/dashboard/plan-checklist";
 import { buildRichChatOpening } from "@/lib/dashboard/seed-assistant-message";
 import {
@@ -49,7 +89,7 @@ export type ChatMessage = {
 };
 
 const FOLLOW_UPS: { id: string; label: string }[] = [
-  { id: "plan", label: "Help me make a plan" },
+  { id: "plan", label: "Help me make a quick plan" },
   { id: "calm", label: "Help me calm down right now" },
   { id: "sleep", label: "Help me improve sleep tonight" },
   { id: "workload", label: "Break down my workload" },
@@ -111,6 +151,7 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
     const [draft, setDraft] = useState("");
     const [sending, setSending] = useState(false);
     const [sendError, setSendError] = useState<string | null>(null);
+    const [planFlow, setPlanFlow] = useState<ChatPlanSession | null>(null);
 
     const activePlan = plans != null && plans.length > 0 ? plans[0] : null;
     const planProgress = activePlan
@@ -185,7 +226,399 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
           });
         }
 
+        const pushAssistant = (content: string) => {
+          setMessages((prev) => [
+            ...prev,
+            { id: newId(), role: "assistant", content },
+          ]);
+        };
+
+        const runPlanGeneration = async (
+          base: PendingChatGenerate,
+          restoreOnFail?: ChatPlanSession,
+        ) => {
+          try {
+            const data = await generatePlan({
+              anonymous_id: anonymousId,
+              plan_type: base.planType,
+              user_request: base.userRequest.trim() || null,
+              checkin_context: buildPlanCheckinContext(checkin),
+              plan_context:
+                base.planType === "personal_tasks"
+                  ? null
+                  : buildPlanContextPayload(base.planType, base.rawAnswers),
+              plan_name:
+                base.planType === "personal_tasks"
+                  ? (base.planName?.trim() || null)
+                  : null,
+              schedule_kind:
+                base.planType === "personal_tasks" ? base.scheduleKind : null,
+              user_tasks:
+                base.planType === "personal_tasks" && base.userTasks?.length
+                  ? base.userTasks
+                  : null,
+              generate_full_schedule:
+                base.planType === "personal_tasks"
+                  ? base.generateFullSchedule
+                  : false,
+            });
+            const meta = buildSavedMetaForChatGenerate(base);
+            setPlanFlow({ kind: "review", draft: data, meta, base });
+            pushAssistant(summarizeGeneratedPlan(data));
+          } catch (e) {
+            pushAssistant(
+              `I couldn’t generate that plan (${e instanceof Error ? e.message : "error"}). Check the API or try the Plan tab. Say **cancel** to exit this flow.`,
+            );
+            if (restoreOnFail) setPlanFlow(restoreOnFail);
+          }
+        };
+
+        const handlePlanFlowActions = async (
+          session: ChatPlanSession,
+          userText: string,
+        ) => {
+          if (session.kind === "risk_strip") {
+            if (wantsKeepPlanInstead(userText)) {
+              setPlanFlow({
+                kind: "review",
+                draft: session.draft,
+                meta: session.meta,
+                base: session.base,
+              });
+              pushAssistant(
+                "Keeping the current draft. Reply **save** when you’re ready, or describe other tweaks.",
+              );
+              return;
+            }
+            if (wantsConfirmRisk(userText)) {
+              const nextBase: PendingChatGenerate = {
+                ...session.base,
+                userRequest: `${session.base.userRequest} User confirmed in chat: remove or reduce wellness, recovery, and extra pacing steps; shorter checklist focused on core obligations.`.trim(),
+              };
+              await runPlanGeneration(nextBase, {
+                kind: "risk_strip",
+                draft: session.draft,
+                meta: session.meta,
+                base: session.base,
+                baselineComposite: session.baselineComposite,
+                strippedProjected: session.strippedProjected,
+                explainer: session.explainer,
+              });
+              return;
+            }
+            if (wantsCancelFlow(userText)) {
+              setPlanFlow(null);
+              pushAssistant(
+                "Okay—we stopped plan-making. Use the quick prompt or say you want a plan anytime.",
+              );
+              return;
+            }
+            pushAssistant(
+              "Reply **confirm** to regenerate a leaner plan, or **keep** to stay with the last draft.",
+            );
+            return;
+          }
+
+          if (wantsCancelFlow(userText)) {
+            setPlanFlow(null);
+            pushAssistant(
+              "Okay—we stopped plan-making. Use the quick prompt or say you want a plan anytime.",
+            );
+            return;
+          }
+
+          switch (session.kind) {
+            case "pick_type": {
+              const id = parsePlanTypeId(userText);
+              if (!id) {
+                pushAssistant(
+                  "Reply with a number 1–8 or an id (e.g. study_plan). Say **cancel** to stop.",
+                );
+                return;
+              }
+              if (id === "personal_tasks") {
+                setPlanFlow({ kind: "personal_name" });
+                pushAssistant(
+                  "What should we call this plan? (Short name—same as the Plan tab.)",
+                );
+                return;
+              }
+              const fields = fieldsForPlanType(id);
+              if (fields.length === 0) {
+                pushAssistant(
+                  "That plan type has no extra questions in-app—try another number or say **cancel**.",
+                );
+                return;
+              }
+              setPlanFlow({
+                kind: "preset_field",
+                planType: id,
+                index: 0,
+                answers: {},
+              });
+              pushAssistant(formatPresetFieldQuestion(id, fields[0]));
+              return;
+            }
+            case "personal_name": {
+              const name = userText.trim();
+              if (name.length < 2) {
+                pushAssistant("Add a short plan name (at least a couple characters).");
+                return;
+              }
+              setPlanFlow({ kind: "personal_schedule", planName: name.slice(0, 200) });
+              pushAssistant(
+                "Is this a **daily** or **weekly** plan? Reply with `daily` or `weekly`.",
+              );
+              return;
+            }
+            case "personal_schedule": {
+              const sk = parseScheduleKind(userText);
+              if (!sk) {
+                pushAssistant("Reply with **daily** or **weekly**.");
+                return;
+              }
+              setPlanFlow({
+                kind: "personal_tasks",
+                planName: session.planName,
+                scheduleKind: sk,
+              });
+              pushAssistant(
+                [
+                  "List your tasks—**one per line**. Optional format:",
+                  "`Task name | high, medium, or low | 45 min`",
+                  "Example: `Inbox zero | high | 1h`",
+                  "",
+                  "If you skip priority or time, we’ll assume medium priority and flexible time.",
+                ].join("\n"),
+              );
+              return;
+            }
+            case "personal_tasks": {
+              const parsed = parsePersonalTaskLines(userText);
+              if (!parsed.ok) {
+                pushAssistant(parsed.error ?? "Couldn’t read tasks—try again.");
+                return;
+              }
+              setPlanFlow({
+                kind: "personal_full",
+                planName: session.planName,
+                scheduleKind: session.scheduleKind,
+                tasks: parsed.tasks,
+              });
+              pushAssistant(
+                "Include a fuller schedule with pacing, rest, and light connection (may add more checklist items)? Reply **yes** or **no**.",
+              );
+              return;
+            }
+            case "personal_full": {
+              const yn = parseYesNo(userText);
+              if (yn === null) {
+                pushAssistant("Please reply **yes** or **no**.");
+                return;
+              }
+              const base: PendingChatGenerate = {
+                planType: "personal_tasks",
+                planName: session.planName,
+                scheduleKind: session.scheduleKind,
+                userTasks: session.tasks,
+                generateFullSchedule: yn,
+                rawAnswers: {},
+                userRequest: "",
+              };
+              setPlanFlow({ kind: "await_notes", base });
+              pushAssistant(optionalNotesPrompt());
+              return;
+            }
+            case "preset_field": {
+              const fields = fieldsForPlanType(session.planType);
+              const field = fields[session.index];
+              if (!field) {
+                pushAssistant("Something went wrong in the questionnaire—say **cancel**.");
+                return;
+              }
+              const resolved =
+                field.kind === "select"
+                  ? normalizePresetAnswer(
+                      parseSelectChoice(userText, field) ?? userText,
+                    )
+                  : normalizePresetAnswer(userText);
+              if (!resolved) {
+                pushAssistant("I need an answer for that—try again.");
+                return;
+              }
+              const answers = { ...session.answers, [field.key]: resolved };
+              if (session.index + 1 < fields.length) {
+                setPlanFlow({
+                  kind: "preset_field",
+                  planType: session.planType,
+                  index: session.index + 1,
+                  answers,
+                });
+                pushAssistant(
+                  formatPresetFieldQuestion(session.planType, fields[session.index + 1]),
+                );
+                return;
+              }
+              if (!hasEnoughPlanContext(session.planType, answers)) {
+                pushAssistant(
+                  "A bit more detail is required for this plan type—elaborate on the last answer or say **cancel**.",
+                );
+                return;
+              }
+              const base: PendingChatGenerate = {
+                planType: session.planType,
+                planName: null,
+                scheduleKind: null,
+                userTasks: null,
+                generateFullSchedule: false,
+                rawAnswers: answers,
+                userRequest: "",
+              };
+              setPlanFlow({ kind: "await_notes", base });
+              pushAssistant(optionalNotesPrompt());
+              return;
+            }
+            case "await_notes": {
+              const note =
+                userText.trim().toLowerCase() === "skip"
+                  ? ""
+                  : userText.trim();
+              const base: PendingChatGenerate = {
+                ...session.base,
+                userRequest: note,
+              };
+              await runPlanGeneration(base, { kind: "await_notes", base });
+              return;
+            }
+            case "review": {
+              if (wantsSavePlanReply(userText)) {
+                try {
+                  await savePlan({
+                    anonymous_id: anonymousId,
+                    source_checkin_id: checkin.id,
+                    plan: session.draft.plan,
+                    model: session.draft.model,
+                    source: session.draft.source,
+                    plan_meta: session.meta ?? null,
+                  });
+                  emitDashboardPlansMutated();
+                  const list = await getPlans(anonymousId);
+                  setPlans(list);
+                  setPlanFlow(null);
+                  pushAssistant(
+                    "Your plan is saved—open the **Plan** tab to work through it. This chat stays read-only for other tabs.",
+                  );
+                } catch (e) {
+                  pushAssistant(
+                    `Couldn’t save (${e instanceof Error ? e.message : "error"}). Try saving from the Plan tab.`,
+                  );
+                }
+                return;
+              }
+              const checklistEdit = applyChecklistEditFromChatMessage({
+                userText,
+                items: session.draft.plan.checklist_items,
+              });
+              if (checklistEdit.kind === "clarify") {
+                pushAssistant(checklistEdit.message);
+                return;
+              }
+              if (checklistEdit.kind === "applied") {
+                const newDraft = {
+                  ...session.draft,
+                  plan: {
+                    ...session.draft.plan,
+                    checklist_items: checklistEdit.items,
+                  },
+                };
+                setPlanFlow({
+                  kind: "review",
+                  draft: newDraft,
+                  meta: null,
+                  base: session.base,
+                });
+                pushAssistant(
+                  `${checklistEdit.message}\n\n${formatChecklistPreviewLines(checklistEdit.items)}`,
+                );
+                return;
+              }
+              if (wantsStripRecoveryOrLightenLoad(userText)) {
+                const list = plans ?? [];
+                const burnoutModel = buildBurnoutViewModel(checkin, {
+                  previousCheckin,
+                  latestPlanChecklist: list[0]?.checklist_items ?? null,
+                });
+                const { baseline, stripped, line } =
+                  projectStrainIfStrippingRecovery({
+                    checkin,
+                    baselineComposite: burnoutModel.composite,
+                    checklistItems: session.draft.plan.checklist_items,
+                  });
+                setPlanFlow({
+                  kind: "risk_strip",
+                  draft: session.draft,
+                  meta: session.meta,
+                  base: session.base,
+                  baselineComposite: baseline,
+                  strippedProjected: stripped,
+                  explainer: line,
+                });
+                pushAssistant(
+                  [
+                    "Trimming wellness, recovery, or pacing usually shifts the **rule-based readout** upward because those pieces buffer load—not clinical, and not a prediction.",
+                    "",
+                    `Your current overview-style strain is about **${baseline}/100**. If you remove that padding, a rough illustrative level is often nearer **${stripped}/100**.`,
+                    "",
+                    line,
+                    "",
+                    "Reply **confirm** if you’re sure you want a leaner plan without those softer steps, or **keep** to leave this draft as-is.",
+                  ].join("\n"),
+                );
+                return;
+              }
+              if (wantsFullPlanRegenerate(userText)) {
+                const nextBase: PendingChatGenerate = {
+                  ...session.base,
+                  userRequest: `${session.base.userRequest} User asked in chat to regenerate the entire plan (same answers, fresh generation).`.trim(),
+                };
+                await runPlanGeneration(nextBase, {
+                  kind: "review",
+                  draft: session.draft,
+                  meta: session.meta,
+                  base: session.base,
+                });
+                return;
+              }
+              const nextBase: PendingChatGenerate = {
+                ...session.base,
+                userRequest: `${session.base.userRequest} Revision requested in chat: ${userText.trim()}`.trim(),
+              };
+              await runPlanGeneration(nextBase, {
+                kind: "review",
+                draft: session.draft,
+                meta: session.meta,
+                base: session.base,
+              });
+              return;
+            }
+            default:
+              return;
+          }
+        };
+
         try {
+          const flowSnapshot = planFlow;
+          if (flowSnapshot) {
+            await handlePlanFlowActions(flowSnapshot, trimmed);
+            return;
+          }
+
+          if (messageStartsPlanFlow(trimmed)) {
+            setPlanFlow({ kind: "pick_type" });
+            pushAssistant(formatPlanTypeMenu());
+            return;
+          }
+
           const list = plans ?? [];
           const burnoutModel = buildBurnoutViewModel(checkin, {
             previousCheckin,
@@ -238,6 +671,7 @@ export const SupportChatPanel = forwardRef<SupportChatPanelHandle, Props>(
         messages,
         sending,
         plans,
+        planFlow,
         previousCheckin,
         onOpenBurnout,
       ],

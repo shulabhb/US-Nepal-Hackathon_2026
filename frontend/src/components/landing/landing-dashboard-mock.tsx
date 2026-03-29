@@ -103,7 +103,7 @@ export function LandingDashboardMock({ className }: LandingDashboardMockProps) {
         className,
       )}
       role="img"
-      aria-label="Example dashboard preview: illustrative burnout meters and four help areas. Not real data."
+      aria-label="Example dashboard preview: illustrative burnout meters and the four workspace areas—Plan, Support chat, Burnout, check-in again. Not real data."
     >
       <div className="h-1 w-full shrink-0 rounded-full bg-amber-500/40" />
       <div className="space-y-4 px-3 py-4 sm:space-y-5 sm:px-4 sm:py-5">
@@ -122,8 +122,8 @@ export function LandingDashboardMock({ className }: LandingDashboardMockProps) {
             Burnout meters
           </p>
           <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground sm:text-xs">
-            Three illustrative strain rings—example numbers only; your real
-            workspace updates after a check-in.
+            Same three rings as the live dashboard: Now plus two scenario
+            projections once you have tasks—example numbers only here.
           </p>
           <div
             className="-mx-0.5 flex flex-nowrap justify-center gap-3 sm:gap-5"
@@ -141,8 +141,8 @@ export function LandingDashboardMock({ className }: LandingDashboardMockProps) {
             What can help?
           </p>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground sm:text-xs">
-            Each area has a different job—structure, a place to talk, depth on
-            strain, or a fresh snapshot.
+            Matches Overview: Plan, Support chat, Burnout detail, and checking in
+            again when you’re ready.
           </p>
           <ul className="mt-3 grid grid-cols-2 gap-2 sm:gap-2.5 lg:grid-cols-4">
             <li className="min-w-0">

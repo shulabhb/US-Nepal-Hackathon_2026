@@ -22,11 +22,11 @@ export function FinalCtaSection() {
             id="cta-heading"
             className="font-heading text-balance text-3xl font-semibold tracking-tight text-foreground sm:text-4xl"
           >
-            Room to adjust—before things get loud.
+            Your snapshot, your workspace, your pace.
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground">
-            One check-in, a clear readout, and steps you can try while you still
-            have bandwidth.
+            Run the check-in when you’re ready, then use Plan, Support chat, and
+            Burnout together—or add a fresh check-in when the season changes.
           </p>
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <Link

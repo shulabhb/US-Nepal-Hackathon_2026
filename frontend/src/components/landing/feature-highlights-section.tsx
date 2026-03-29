@@ -12,33 +12,33 @@ import { LANDING_IDS } from "@/lib/landing-ids";
 const features = [
   {
     icon: UserRound,
-    title: "Anonymous check-in",
-    body: "No account required to begin.",
+    title: "Anonymous on this device",
+    body: "No real name; an anonymous ID stores your check-ins and plans for this browser.",
   },
   {
     icon: ScanLine,
-    title: "Focused signals",
-    body: "Stress, symptoms, optional sleep—nothing extra.",
+    title: "Structured check-in",
+    body: "Role, pressures, stress and energy sliders, symptoms, optional sleep—paced in steps you can resume.",
   },
   {
     icon: Moon,
-    title: "Sleep (optional)",
-    body: "Rhythm and duration when you opt in.",
+    title: "Optional sleep context",
+    body: "Duration, quality, and rhythm when you want the snapshot to include recovery nuance.",
   },
   {
     icon: BellRing,
-    title: "Risk summary",
-    body: "One calm frame with short context.",
+    title: "Burnout readout & rings",
+    body: "Risk band, dimension scores, and three strain rings that visualize load—not a clinical score.",
   },
   {
     icon: Check,
-    title: "Suggestions",
-    body: "Steps scaled to how depleted you feel.",
+    title: "Plan, tasks, follow-through",
+    body: "Generate or refine a plan into checklists and My tasks; overview shows gentle progress on saved plans.",
   },
   {
     icon: Route,
-    title: "If you need more help",
-    body: "Pointers to care routes when intensity rises.",
+    title: "Support chat & care cues",
+    body: "Chat uses your latest check-in context; scripted recommendations can remind you about human support when patterns are heavy.",
   },
 ] as const;
 
@@ -61,8 +61,8 @@ export function FeatureHighlightsSection() {
             What you get
           </h2>
           <p className="mt-3 text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Everything serves one outcome: a useful readout and a doable path
-            forward.
+            The product is the whole workspace—not only the first screen after
+            onboarding.
           </p>
         </div>
         <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

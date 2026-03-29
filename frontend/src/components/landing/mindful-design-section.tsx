@@ -23,8 +23,8 @@ export function MindfulDesignSection() {
               Respectful by default
             </h2>
             <p className="mt-3 text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Supportive tone, readable type, and clear focus states—because
-              bandwidth is already low when you show up here.
+              Same tone carries from onboarding through Plan, Chat, and Burnout
+              views—because bandwidth is already low when you show up here.
             </p>
           </div>
           <Card className="border-border/80 bg-card/90 shadow-sm backdrop-blur-sm">
@@ -51,8 +51,8 @@ export function MindfulDesignSection() {
                     Privacy as product
                   </h3>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    Anonymous sessions by default; you stay in control of what
-                    you share.
+                    Anonymous on this device by default; check-ins and plans are
+                    tied to your session—not a public profile.
                   </p>
                 </div>
               </div>

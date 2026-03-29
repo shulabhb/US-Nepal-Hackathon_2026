@@ -11,6 +11,20 @@ export type PlanContextField = {
   options?: readonly { value: string; label: string }[];
 };
 
+/** Plan tab + chat plan builder — ids must match backend `plan_type`. */
+export const PLAN_TYPE_OPTIONS = [
+  { id: "personal_tasks", label: "My tasks (daily or weekly)" },
+  { id: "stress_reset", label: "Stress reset" },
+  { id: "sleep_reset", label: "Sleep reset" },
+  { id: "study_plan", label: "Study plan" },
+  { id: "workload_plan", label: "Workload plan" },
+  { id: "fitness_plan", label: "Fitness plan" },
+  { id: "job_search_plan", label: "Job search plan" },
+  { id: "custom_plan", label: "Something else" },
+] as const;
+
+export type PlanTypeId = (typeof PLAN_TYPE_OPTIONS)[number]["id"];
+
 export const JOB_SEARCH_STAGE_OPTIONS = [
   { value: "Exploring roles", label: "Exploring roles" },
   { value: "Resume / portfolio prep", label: "Resume / portfolio prep" },

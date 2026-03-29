@@ -23,6 +23,8 @@ import {
   fieldsForPlanType,
   hasEnoughPersonalTasksInput,
   hasEnoughPlanContext,
+  PLAN_TYPE_OPTIONS,
+  type PlanTypeId,
 } from "@/lib/dashboard/plan-context-fields";
 import {
   normalizeChecklistForApi,
@@ -65,18 +67,7 @@ function newDraftTask(): DraftTask {
   };
 }
 
-export const PLAN_TYPE_OPTIONS = [
-  { id: "personal_tasks", label: "My tasks (daily or weekly)" },
-  { id: "stress_reset", label: "Stress reset" },
-  { id: "sleep_reset", label: "Sleep reset" },
-  { id: "study_plan", label: "Study plan" },
-  { id: "workload_plan", label: "Workload plan" },
-  { id: "fitness_plan", label: "Fitness plan" },
-  { id: "job_search_plan", label: "Job search plan" },
-  { id: "custom_plan", label: "Something else" },
-] as const;
-
-export type PlanTypeId = (typeof PLAN_TYPE_OPTIONS)[number]["id"];
+export { PLAN_TYPE_OPTIONS, type PlanTypeId } from "@/lib/dashboard/plan-context-fields";
 
 type PlanSubView = "create" | "saved";
 

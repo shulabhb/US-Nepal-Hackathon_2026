@@ -6,23 +6,23 @@ import { LANDING_IDS } from "@/lib/landing-ids";
 const contrasts = [
   {
     icon: HeartPulse,
-    title: "Not therapy",
-    body: "Early awareness and next steps—not a clinician or crisis service.",
+    title: "Not therapy or triage",
+    body: "A self-guided workspace—plan, chat-style support, and readouts are for awareness and pacing, not treatment or crisis response.",
   },
   {
     icon: Ban,
     title: "Not a mood-streak app",
-    body: "Built around burnout signals: load, sleep, symptoms.",
+    body: "Built around burnout-style strain: pressures, energy, symptoms, optional sleep, then dashboards—not daily mood badges.",
   },
   {
     icon: ScanFace,
-    title: "Minimal data",
-    body: "No feeds or social graph—only what the snapshot needs.",
+    title: "Minimal surface area",
+    body: "No social graph or feed—check-ins, plans, and chat tied to your anonymous session.",
   },
   {
     icon: Fingerprint,
-    title: "Early, not surveillance",
-    body: "Meant to catch drift while you can still steer.",
+    title: "Early signal, your steering",
+    body: "Rings and labels flag drift while you can still adjust workload and recovery; you choose Plan, Chat, or a fresh check-in.",
   },
 ] as const;
 
@@ -45,7 +45,8 @@ export function WhyDifferentSection() {
             What we’re not
           </h2>
           <p className="mt-3 text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Clarity and privacy first—especially when energy is thin.
+            The pitch matches the build: check-in data powers snapshots, rings,
+            and the four workspace areas—without pretending to be care.
           </p>
         </div>
         <ul className="mt-10 grid gap-4 lg:grid-cols-2">

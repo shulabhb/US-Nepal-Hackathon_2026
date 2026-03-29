@@ -25,17 +25,19 @@ export function HeroSection() {
               <span className="absolute inline-flex size-full motion-safe:animate-ping rounded-full bg-primary/40 opacity-60" />
               <span className="relative inline-flex size-2 rounded-full bg-primary/80" />
             </span>
-            Anonymous · students &amp; early career
+            Private workspace · anonymous on this device
           </p>
           <h1
             id="hero-heading"
             className="font-heading text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-[2.75rem] lg:leading-[1.12]"
           >
-            Catch burnout risk early—before it feels normal.
+            See burnout strain in plain language—then act in one place.
           </h1>
           <p className="mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-            A short check-in plus optional sleep context → a private snapshot and
-            next steps. No real name required.
+            A structured check-in (stress, energy, symptoms, optional sleep)
+            powers your dashboard: illustrative strain rings, a tailored plan with
+            checklists, support chat that reads your snapshot, and a full Burnout
+            view when you want depth—not a diagnosis, no real name required.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <Link
