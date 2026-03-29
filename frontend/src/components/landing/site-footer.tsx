@@ -13,9 +13,8 @@ export function SiteFooter() {
             Burnout Radar
           </p>
           <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-            Early-support signal for students and young professionals—anonymous by
-            default, sleep-aware when you want it, and grounded in practical next
-            steps.
+            Early burnout signal—anonymous check-in, optional sleep context, and
+            clear next steps.
           </p>
         </div>
         <p className="text-xs leading-relaxed text-muted-foreground">

@@ -5,6 +5,11 @@ import Link from "next/link";
 import type { DashboardTabId } from "@/lib/dashboard/dashboard-tab";
 import { dashboardHref } from "@/lib/dashboard/dashboard-tab";
 import { Button } from "@/components/ui/button";
+import {
+  CHECKIN_AGAIN_BUTTON,
+  CHECKIN_INVITE,
+  CHECKIN_RECHECK_PROMPT,
+} from "@/lib/app-copy";
 import { cn } from "@/lib/utils";
 
 const PRIMARY_TABS: { id: DashboardTabId; label: string }[] = [
@@ -18,6 +23,7 @@ type Props = {
   activeTab?: DashboardTabId;
   variant?: "full" | "minimal";
   onRetake?: () => void;
+  hasSavedCheckin?: boolean;
   className?: string;
 };
 
@@ -25,6 +31,7 @@ export function DashboardNav({
   activeTab = "overview",
   variant = "full",
   onRetake,
+  hasSavedCheckin = false,
   className,
 }: Props) {
   return (
@@ -37,7 +44,7 @@ export function DashboardNav({
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="flex items-center justify-between gap-3 sm:justify-start">
           <Link
-            href={dashboardHref("overview")}
+            href="/"
             className="font-heading text-base font-semibold tracking-tight text-foreground transition-opacity hover:opacity-90"
           >
             Burnout Radar
@@ -85,15 +92,22 @@ export function DashboardNav({
 
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {variant === "full" && onRetake ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 rounded-lg text-xs text-muted-foreground"
-              onClick={onRetake}
-            >
-              Retake check-in
-            </Button>
+            <div className="flex max-w-[16rem] flex-col items-end gap-1 sm:max-w-[18rem]">
+              {hasSavedCheckin ? (
+                <p className="text-right text-[10px] leading-snug text-muted-foreground sm:text-[11px]">
+                  {CHECKIN_RECHECK_PROMPT}
+                </p>
+              ) : null}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 shrink-0 rounded-lg text-xs text-muted-foreground"
+                onClick={onRetake}
+              >
+                {hasSavedCheckin ? CHECKIN_AGAIN_BUTTON : CHECKIN_INVITE}
+              </Button>
+            </div>
           ) : null}
           <Button
             asChild

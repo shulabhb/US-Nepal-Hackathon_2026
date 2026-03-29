@@ -66,6 +66,9 @@ export type BurnoutViewModel = {
   disclaimer: string;
 };
 
+const STANDARD_DISCLAIMER =
+  "Early support signal from your check-in—not a diagnosis, medical advice, or crisis screen.";
+
 function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));
 }
@@ -124,7 +127,7 @@ function planFollowThroughStrain(items: PlanChecklistItem[] | null): number {
   return 36;
 }
 
-function bandFromComposite(c: number): { band: BurnoutRiskBand; label: string } {
+export function bandFromComposite(c: number): { band: BurnoutRiskBand; label: string } {
   if (c < 28) return { band: "low", label: "Low" };
   if (c < 46) return { band: "emerging", label: "Emerging" };
   if (c < 63) return { band: "moderate", label: "Moderate" };
@@ -318,7 +321,7 @@ function buildSummaryLine(args: {
   return core;
 }
 
-type BurnoutSnapshot = {
+export type BurnoutSnapshot = {
   overload: number;
   depletion: number;
   recovery: number;
@@ -666,8 +669,70 @@ export function buildBurnoutViewModel(
     topDrivers: snap.topDrivers,
     helping: snap.helping,
     needsAttention: snap.needsAttention,
-    disclaimer:
-      "Early support signal from your check-in—not a diagnosis, medical advice, or crisis screen.",
+    disclaimer: STANDARD_DISCLAIMER,
+  };
+}
+
+/** Placeholder view model when no check-in is saved yet (dashboard still usable). */
+export function emptyBurnoutViewModel(): BurnoutViewModel {
+  const dim = (
+    id: BurnoutDimensionId,
+    label: string,
+    hint: string,
+  ): BurnoutDimension => ({
+    id,
+    label,
+    score: 0,
+    hint,
+  });
+  return {
+    band: "low",
+    bandLabel: "Low",
+    composite: 0,
+    previousComposite: null,
+    summaryLine: "",
+    dimensions: [
+      dim("overload", "Overload", "Demands, pressure, and mental load."),
+      dim(
+        "depletion",
+        "Depletion",
+        "Energy, motivation, and emotional reserves.",
+      ),
+      dim(
+        "recovery",
+        "Recovery gap",
+        "Sleep hours, quality, and rhythm (higher = more recovery strain).",
+      ),
+      dim(
+        "functional_strain",
+        "Functional strain",
+        "Focus, follow-through, and day-to-day functioning.",
+      ),
+    ],
+    dimensionTrends: {},
+    overallStrainTrend: null,
+    overallTrendHint: null,
+    stressTrend: null,
+    energyTrend: null,
+    recoveryStrainTrend: null,
+    sinceLastCheckinLine: null,
+    topDrivers: [],
+    helping: [],
+    needsAttention: [],
+    disclaimer: STANDARD_DISCLAIMER,
+  };
+}
+
+/** Overview “What helps” when the user has not saved a check-in yet. */
+export function overviewWhatHelpsWhenNoCheckin(): OverviewWhatHelpsContext {
+  return {
+    strainMetaLine: "No check-in yet · 0/100 strain",
+    checkinEyebrow: "Your workspace",
+    checkinHighlight: "Plan & chat anytime",
+    primaryDriver:
+      "You can use the dashboard anytime. Add a check-in when you want a personalized snapshot—optional, private, and easy to pause.",
+    supportingDriver: null,
+    snapshotSummaryLine: null,
   };
 }
 
@@ -694,6 +759,75 @@ export function overviewTopDriverLine(model: BurnoutViewModel): string {
   return "Focus and day-to-day follow-through need the most support.";
 }
 
+/** Short context block for Overview “What helps now” (check-in snapshot only; plan progress is visualized in UI). */
+export type OverviewWhatHelpsContext = {
+  /** Quick strain read from the same inputs as the ring (band + composite). */
+  strainMetaLine: string;
+  checkinEyebrow: string;
+  /** Second-line emphasis, e.g. “What we got”. */
+  checkinHighlight: string;
+  primaryDriver: string;
+  supportingDriver: string | null;
+  /** One line tying snapshot shape to answers (when it adds beyond primary). */
+  snapshotSummaryLine: string | null;
+};
+
+/**
+ * Plain-language drivers from the latest check-in for What helps now.
+ */
+export function overviewWhatHelpsContext(
+  model: BurnoutViewModel,
+  plans: StoredPlan[],
+): OverviewWhatHelpsContext {
+  void plans;
+
+  let primary =
+    model.needsAttention[0]?.trim() ?? overviewTopDriverLine(model);
+  if (primary.length > 130) {
+    primary = `${primary.slice(0, 127)}…`;
+  }
+
+  let supporting: string | null = null;
+  if (model.needsAttention.length > 1) {
+    const s = model.needsAttention[1].trim();
+    if (s && s !== primary) {
+      supporting = s.length > 110 ? `${s.slice(0, 107)}…` : s;
+    }
+  } else if (model.overallTrendHint && model.previousComposite != null) {
+    supporting = model.overallTrendHint;
+  }
+
+  const sum = model.summaryLine.trim();
+  let snapshotSummaryLine: string | null = null;
+  if (sum.length > 0) {
+    const primaryChunk = primary.slice(0, 28).toLowerCase();
+    const sumLower = sum.toLowerCase();
+    const tooSimilar =
+      sumLower.includes(primaryChunk) || primaryLowerIncludesSum(primaryChunk, sumLower);
+    if (!tooSimilar && sum.length > 24) {
+      snapshotSummaryLine = sum.length > 140 ? `${sum.slice(0, 137)}…` : sum;
+    }
+  }
+
+  const strainMetaLine = `${model.bandLabel} overall • ${model.composite}/100 strain`;
+
+  return {
+    strainMetaLine,
+    checkinEyebrow: "From your check-in and saved plans",
+    checkinHighlight: "Check-in & your tasks",
+    primaryDriver: primary,
+    supportingDriver: supporting,
+    snapshotSummaryLine,
+  };
+}
+
+function primaryLowerIncludesSum(primaryChunk: string, sumLower: string): boolean {
+  if (primaryChunk.length < 8) return false;
+  return primaryChunk.split(/\s+/).some(
+    (w) => w.length > 5 && sumLower.includes(w),
+  );
+}
+
 export type OverviewNextMoveKind = "chat" | "plan" | "burnout" | "retake";
 
 export type OverviewNextMove = {
@@ -703,75 +837,30 @@ export type OverviewNextMove = {
   kind: OverviewNextMoveKind;
 };
 
-/**
- * Deterministic “what next” for dashboard Overview (not AI).
- */
-export function pickOverviewNextMove(
-  model: BurnoutViewModel,
-  plans: StoredPlan[],
-): OverviewNextMove {
-  const plan = plans[0];
-  const items = plan?.checklist_items ?? [];
-  const prog = planChecklistProgress(items);
-  const hasPlan = items.length > 0;
-  const nextTask =
-    items.find((i) => i.completed !== true) ?? items[0] ?? null;
+const STALE_CHECKIN_DAYS = 14;
 
-  if (hasPlan && prog.total >= 1 && prog.percent < 52 && nextTask) {
-    const label = (nextTask.label || "Next step").trim();
-    return {
-      headline: "Continue your saved plan",
-      detail:
-        label.length > 0
-          ? `Next up: ${label.length > 80 ? `${label.slice(0, 77)}…` : label}`
-          : "Pick up where you left off in your checklist.",
-      actionLabel: "Open Plan",
-      kind: "plan",
-    };
-  }
+function daysSinceCheckin(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  return (Date.now() - t) / 86_400_000;
+}
 
-  if ((!hasPlan || prog.total === 0) && model.composite >= 38) {
-    return {
-      headline: "Sketch a gentler plan",
-      detail: "A short plan can make the week feel a little more doable.",
-      actionLabel: "Go to Plan",
-      kind: "plan",
-    };
-  }
+export function overviewActionLabel(kind: OverviewNextMoveKind): string {
+  if (kind === "chat") return "Open Support Chat";
+  if (kind === "plan") return "Open Plan";
+  if (kind === "burnout") return "Open Burnout";
+  return "Retake check-in";
+}
 
-  if (model.composite >= 56 || model.band === "high") {
-    return {
-      headline: "Lean on support chat",
-      detail: "Chat reads your latest context—you don’t need a perfect summary to start.",
-      actionLabel: "Open Support Chat",
-      kind: "chat",
-    };
-  }
-
-  if (model.overallStrainTrend === "worsening") {
-    return {
-      headline: "Peek at your Burnout tab",
-      detail: "Overall strain is up a notch—your full picture is one tap away.",
-      actionLabel: "Open Burnout",
-      kind: "burnout",
-    };
-  }
-
-  if (model.band === "low" && model.composite < 30) {
-    return {
-      headline: "Refresh when it helps",
-      detail: "Snapshots fade—an occasional retake keeps this view honest.",
-      actionLabel: "Retake check-in",
-      kind: "retake",
-    };
-  }
-
-  return {
-    headline: "Start with support chat",
-    detail: "A calm place to talk things through with gentle prompts.",
-    actionLabel: "Open Support Chat",
-    kind: "chat",
-  };
+export function overviewChatReason(model: BurnoutViewModel): string {
+  const moderateHigh =
+    model.band === "moderate" ||
+    model.band === "high" ||
+    model.composite >= 52;
+  return moderateHigh
+    ? "Need to vent, rant, or brainstorm? Talk it through before you add more pressure."
+    : "A calm place to think out loud—rant, brainstorm, or sort what’s stuck.";
 }
 
 export type OverviewServiceRec = {
@@ -782,20 +871,40 @@ export type OverviewServiceRec = {
   reason: string;
 };
 
-function overviewServiceTitle(kind: OverviewNextMoveKind): string {
-  if (kind === "chat") return "Support Chat";
-  if (kind === "plan") return "Plan";
-  if (kind === "burnout") return "Burnout";
-  return "New check-in";
+/** Titles + reasons for plan tiles (Overview “What helps now”). */
+function planServiceCopy(
+  hasChecklist: boolean,
+  planIncomplete: boolean,
+): { title: string; reason: string } {
+  if (planIncomplete) {
+    return {
+      title: "Tailored plan · pending tasks",
+      reason:
+        "Refine open steps against your check-in so load doesn’t harden into burnout.",
+    };
+  }
+  if (!hasChecklist) {
+    return {
+      title: "Make a tailored plan",
+      reason:
+        "Shape steps from what you logged—target strain early and ease burnout risk.",
+    };
+  }
+  return {
+    title: "Tailor your next plan pass",
+    reason:
+      "Refresh or extend your list so it still matches today’s strain—keeps burnout from sneaking back.",
+  };
 }
 
 /**
- * Up to three deterministic service hints for Overview (primary + extras).
+ * Up to three ranked service hints for Overview “What helps now”.
+ * Prioritizes Plan + Support chat; New check-in only when clearly useful (e.g. stale snapshot).
  */
 export function overviewBestServices(
   model: BurnoutViewModel,
   plans: StoredPlan[],
-  primaryMove: OverviewNextMove,
+  latestCheckinCreatedAt?: string | null,
 ): OverviewServiceRec[] {
   const out: OverviewServiceRec[] = [];
   const seen = new Set<OverviewNextMoveKind>();
@@ -810,60 +919,135 @@ export function overviewBestServices(
     out.push({ id: kind, title, reason });
   };
 
-  add(
-    primaryMove.kind,
-    overviewServiceTitle(primaryMove.kind),
-    primaryMove.headline,
-  );
+  const items = plans[0]?.checklist_items ?? [];
+  const prog = planChecklistProgress(items);
+  const hasChecklist = items.length > 0;
+  const planIncomplete = hasChecklist && prog.completed < prog.total;
+  const meaningfulStrain = model.composite >= 38;
 
-  const lead = [...model.dimensions].sort((a, b) => b.score - a.score)[0];
-  const hasPlan = (plans[0]?.checklist_items?.length ?? 0) > 0;
+  const sortedDims = [...model.dimensions].sort((a, b) => b.score - a.score);
+  const lead = sortedDims[0];
+  const recoveryOrDepletionLead =
+    lead != null &&
+    (lead.id === "recovery" || lead.id === "depletion") &&
+    lead.score >= 40;
 
-  if (
-    lead?.id === "recovery" &&
-    model.composite >= 36 &&
-    primaryMove.kind !== "chat"
-  ) {
+  const age = daysSinceCheckin(latestCheckinCreatedAt);
+  const stale = age != null && age >= STALE_CHECKIN_DAYS;
+
+  const suggestBurnout =
+    model.overallStrainTrend === "worsening" || model.composite >= 48;
+
+  // Case D: stale snapshot and no incomplete plan — refresh first, then core services.
+  if (stale && !planIncomplete) {
     add(
-      "chat",
-      overviewServiceTitle("chat"),
-      "Good fit when nights or recovery feel shaky.",
+      "retake",
+      "New check-in",
+      "Refresh so guidance matches how things are now.",
     );
+    add("chat", "Support chat", overviewChatReason(model));
+    const dCopy = planServiceCopy(hasChecklist, false);
+    add("plan", dCopy.title, dCopy.reason);
+    return out.slice(0, 3);
   }
 
-  if (
-    model.overallStrainTrend === "worsening" &&
-    primaryMove.kind !== "burnout"
-  ) {
-    add(
-      "burnout",
-      overviewServiceTitle("burnout"),
-      "See the full strain picture vs last time.",
-    );
+  // Case A: incomplete plan — Plan first, chat second.
+  if (planIncomplete) {
+    const pCopy = planServiceCopy(hasChecklist, true);
+    add("plan", pCopy.title, pCopy.reason);
+    add("chat", "Support chat", overviewChatReason(model));
+    if (suggestBurnout && !seen.has("burnout")) {
+      add("burnout", "Burnout view", "See the full burnout picture and trends.");
+    } else if (stale && !seen.has("retake")) {
+      add(
+        "retake",
+        "New check-in",
+        "It's been a while—update when you have a minute.",
+      );
+    } else if (!seen.has("burnout") && model.composite >= 40) {
+      add("burnout", "Burnout view", "See the full burnout picture and trends.");
+    }
+    return out.slice(0, 3);
   }
 
-  if (!hasPlan && model.composite >= 40 && primaryMove.kind !== "plan") {
-    add(
-      "plan",
-      overviewServiceTitle("plan"),
-      "Sketch steps when load feels high and scattered.",
-    );
+  // Case C: recovery or depletion leading — chat first, then plan.
+  if (recoveryOrDepletionLead && model.composite >= 36) {
+    add("chat", "Support chat", overviewChatReason(model));
+    const cCopy = planServiceCopy(hasChecklist, planIncomplete);
+    add("plan", cCopy.title, cCopy.reason);
+    add("burnout", "Burnout view", "See the full burnout picture and trends.");
+    return out.slice(0, 3);
   }
 
-  if (
-    out.length < 2 &&
+  // Case B: no checklist + meaningful strain — make a plan first.
+  if (!hasChecklist && meaningfulStrain) {
+    const bCopy = planServiceCopy(false, false);
+    add("plan", bCopy.title, bCopy.reason);
+    add("chat", "Support chat", overviewChatReason(model));
+    add("burnout", "Burnout view", "See the full burnout picture and trends.");
+    return out.slice(0, 3);
+  }
+
+  // Default: surface plan + chat; retake only as a weak-history hint, not as primary.
+  const pCopy = planServiceCopy(hasChecklist, planIncomplete);
+  add("plan", pCopy.title, pCopy.reason);
+  add("chat", "Support chat", overviewChatReason(model));
+  if (suggestBurnout && !seen.has("burnout")) {
+    add("burnout", "Burnout view", "See the full burnout picture and trends.");
+  } else if (
+    out.length < 3 &&
+    model.previousComposite === null &&
     model.band === "low" &&
-    model.composite < 34 &&
-    primaryMove.kind !== "retake"
+    model.composite < 34
   ) {
     add(
       "retake",
-      overviewServiceTitle("retake"),
-      "Refresh the radar when life shifts.",
+      "New check-in",
+      "A fresh check-in helps when there's little history yet.",
     );
+  } else if (!seen.has("burnout") && model.composite >= 42) {
+    add("burnout", "Burnout view", "See the full burnout picture and trends.");
   }
 
   return out.slice(0, 3);
+}
+
+/**
+ * Deterministic “what next” for dashboard Overview (not AI).
+ * Mirrors the first item from {@link overviewBestServices}.
+ */
+export function pickOverviewNextMove(
+  model: BurnoutViewModel,
+  plans: StoredPlan[],
+  latestCheckinCreatedAt?: string | null,
+): OverviewNextMove {
+  const recs = overviewBestServices(model, plans, latestCheckinCreatedAt);
+  const first = recs[0];
+  if (first) {
+    return {
+      kind: first.id,
+      headline: first.title,
+      detail: first.reason,
+      actionLabel: overviewActionLabel(first.id),
+    };
+  }
+  return {
+    kind: "chat",
+    headline: "Support chat",
+    detail: overviewChatReason(model),
+    actionLabel: overviewActionLabel("chat"),
+  };
+}
+
+/**
+ * Rule-based burnout snapshot for a single check-in (same math as the full view model).
+ * Pass plan checklist only when that snapshot should include follow-through strain (e.g. latest).
+ */
+export function burnoutSnapshotForCheckin(
+  checkin: CheckinDetailResponse,
+  latestPlanChecklist?: PlanChecklistItem[] | null,
+): BurnoutSnapshot {
+  return computeBurnoutSnapshot(checkin, latestPlanChecklist ?? null);
 }
 
 /** For tests or callers that already have history newest-first */

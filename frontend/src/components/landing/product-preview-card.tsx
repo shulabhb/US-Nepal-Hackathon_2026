@@ -34,7 +34,7 @@ export function ProductPreviewCard({ className }: ProductPreviewCardProps) {
               Snapshot · This week
             </CardTitle>
             <CardDescription className="text-xs sm:text-sm">
-              Illustrative preview · not a clinical readout
+              Example only · not clinical
             </CardDescription>
           </div>
           <span className="inline-flex h-5 shrink-0 items-center justify-center rounded-full border border-border/80 bg-background/80 px-2.5 text-[0.7rem] font-medium text-muted-foreground backdrop-blur-sm">
@@ -53,7 +53,7 @@ export function ProductPreviewCard({ className }: ProductPreviewCardProps) {
               Elevated · sustained
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Mostly workload overload, not a verdict
+              Example framing
             </p>
           </div>
           <div className="rounded-lg border border-border/80 bg-muted/40 p-3">
@@ -78,8 +78,7 @@ export function ProductPreviewCard({ className }: ProductPreviewCardProps) {
             Moderate · early pattern
           </p>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Signals suggest rising fatigue—useful to adjust course early, not
-            after a crash.
+            Illustrative risk band—not your real result.
           </p>
         </div>
         <div>
@@ -106,9 +105,9 @@ export function ProductPreviewCard({ className }: ProductPreviewCardProps) {
         </div>
         <Separator className="bg-border/80" />
         <p className="flex items-center gap-1 text-xs text-muted-foreground">
-          <span>Grounded recommendations</span>
+          <span>Suggestions only</span>
           <ArrowRight className="size-3 opacity-70" aria-hidden />
-          <span>no diagnosis label</span>
+          <span>not a diagnosis</span>
         </p>
       </CardContent>
     </Card>

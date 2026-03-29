@@ -7,8 +7,6 @@ import type { OnboardingStep2 } from "./step-two";
 const STORAGE_KEY = "burnout-radar-onboarding-v1";
 /** Same-device dedupe: last successfully synced onboarding payload fingerprint. */
 const CHECKIN_SYNC_HASH_KEY = "burnout-radar-checkin-sync-hash";
-/** Step 3 → recommendations: open dashboard once save/sync succeeds. */
-const PREFER_DASHBOARD_AFTER_RECS_KEY = "burnout-radar-prefer-dashboard-after-recs";
 
 export type OnboardingPersistedState = {
   step1: OnboardingStep1Data | null;
@@ -357,27 +355,6 @@ export function clearOnboardingState(): void {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem(STORAGE_KEY);
   sessionStorage.removeItem(CHECKIN_SYNC_HASH_KEY);
-  sessionStorage.removeItem(PREFER_DASHBOARD_AFTER_RECS_KEY);
-}
-
-/** Call when leaving step 3 for recommendations so a successful sync can land on `/dashboard`. */
-export function setPreferDashboardAfterRecommendations(): void {
-  if (typeof window === "undefined") return;
-  sessionStorage.setItem(PREFER_DASHBOARD_AFTER_RECS_KEY, "1");
-}
-
-export function clearPreferDashboardAfterRecommendations(): void {
-  if (typeof window === "undefined") return;
-  sessionStorage.removeItem(PREFER_DASHBOARD_AFTER_RECS_KEY);
-}
-
-/** Returns true once, then clears the flag. */
-export function consumePreferDashboardAfterRecommendations(): boolean {
-  if (typeof window === "undefined") return false;
-  const v = sessionStorage.getItem(PREFER_DASHBOARD_AFTER_RECS_KEY);
-  if (v !== "1") return false;
-  sessionStorage.removeItem(PREFER_DASHBOARD_AFTER_RECS_KEY);
-  return true;
 }
 
 export function getCheckinSyncHash(): string | null {

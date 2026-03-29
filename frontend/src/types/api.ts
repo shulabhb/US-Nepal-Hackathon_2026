@@ -109,6 +109,24 @@ export type GeneratedPlan = {
   notes: string[];
 };
 
+/** User-entered task before generation — mirrors backend `UserPlanTaskInput`. */
+export type UserPlanTaskInput = {
+  name: string;
+  priority: "high" | "medium" | "low";
+  /** e.g. "45 min", "2h" — fuels time-aware generation and saved analytics. */
+  estimated_time?: string | null;
+};
+
+/** Persisted with saved plans when generated from “My tasks” (daily/weekly). */
+export type SavedPlanGenerationMeta = {
+  version: 1;
+  plan_type: string;
+  schedule_kind?: "daily" | "weekly" | null;
+  plan_name?: string | null;
+  generate_full_schedule?: boolean;
+  user_tasks?: UserPlanTaskInput[];
+};
+
 export type GeneratePlanRequest = {
   anonymous_id?: string | null;
   plan_type: string;
@@ -116,6 +134,14 @@ export type GeneratePlanRequest = {
   checkin_context: Record<string, unknown>;
   /** Trimmed question answers for the selected plan type. */
   plan_context?: Record<string, string> | null;
+  /** Optional: name from “My tasks” flow. */
+  plan_name?: string | null;
+  /** Daily vs weekly scope for personal task plans. */
+  schedule_kind?: "daily" | "weekly" | null;
+  /** Tasks the user wants included; model orders and may add recovery steps. */
+  user_tasks?: UserPlanTaskInput[] | null;
+  /** Ask model for rest, sleep, social, and fuller ordering. */
+  generate_full_schedule?: boolean;
 };
 
 export type GeneratePlanResponse = {
@@ -138,6 +164,7 @@ export type StoredPlan = {
   model: string | null;
   source: string;
   created_at: string;
+  plan_meta?: SavedPlanGenerationMeta | Record<string, unknown> | null;
 };
 
 export type SavePlanRequest = {
@@ -146,6 +173,7 @@ export type SavePlanRequest = {
   plan: GeneratedPlan;
   model?: string | null;
   source?: string;
+  plan_meta?: SavedPlanGenerationMeta | Record<string, unknown> | null;
 };
 
 export type SavePlanResponse = {

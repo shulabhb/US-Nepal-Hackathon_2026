@@ -2,6 +2,7 @@ import { Lock, UserX } from "lucide-react";
 import Link from "next/link";
 
 import { buttonVariants } from "@/components/ui/button-variants";
+import { LANDING_CHECKIN_CTA, LANDING_HOW_IT_WORKS } from "@/lib/landing-copy";
 import { LANDING_IDS } from "@/lib/landing-ids";
 import { cn } from "@/lib/utils";
 
@@ -24,47 +25,45 @@ export function HeroSection() {
               <span className="absolute inline-flex size-full motion-safe:animate-ping rounded-full bg-primary/40 opacity-60" />
               <span className="relative inline-flex size-2 rounded-full bg-primary/80" />
             </span>
-            Anonymous early support for students &amp; young professionals
+            Anonymous · students &amp; early career
           </p>
           <h1
             id="hero-heading"
             className="font-heading text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-[2.75rem] lg:leading-[1.12]"
           >
-            Catch burnout risk early—before it becomes your default state.
+            Catch burnout risk early—before it feels normal.
           </h1>
           <p className="mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Burnout Radar reads a small set of self-reported signals—and optional
-            sleep rhythm—to surface a clear, private snapshot and practical next
-            steps. Low friction, no real name required, and built for the stretch
-            between “I’m fine” and “I need help now.”
+            A short check-in plus optional sleep context → a private snapshot and
+            next steps. No real name required.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <Link
               href="/onboarding"
               className={cn(
                 buttonVariants({ variant: "default", size: "lg" }),
-                "h-11 min-h-11 justify-center rounded-xl px-6 text-base shadow-sm sm:w-auto",
+                "h-11 min-h-11 justify-center rounded-xl px-6 text-base font-semibold shadow-sm sm:w-auto",
               )}
             >
-              Start Private Check-In
+              {LANDING_CHECKIN_CTA}
             </Link>
             <a
               href={`#${LANDING_IDS.howItWorks}`}
               className={cn(
                 buttonVariants({ variant: "outline", size: "lg" }),
-                "h-11 min-h-11 justify-center rounded-xl border-border/90 bg-background/70 px-6 text-base backdrop-blur-sm sm:w-auto",
+                "h-11 min-h-11 justify-center rounded-xl border-border/90 bg-background/70 px-6 text-base font-semibold backdrop-blur-sm sm:w-auto",
               )}
             >
-              See How It Works
+              {LANDING_HOW_IT_WORKS}
             </a>
           </div>
           <ul
             className="mt-8 flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:gap-x-6 sm:gap-y-2"
-            aria-label="Privacy reassurances"
+            aria-label="Privacy"
           >
             <li className="flex items-center gap-2">
               <UserX className="size-4 shrink-0 text-primary/80" aria-hidden />
-              <span>No real name required</span>
+              <span>No real name</span>
             </li>
             <li className="flex items-center gap-2">
               <Lock className="size-4 shrink-0 text-primary/80" aria-hidden />

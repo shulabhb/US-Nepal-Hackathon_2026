@@ -89,6 +89,32 @@ export async function getLatestCheckin(
 }
 
 /**
+ * GET latest check-in, or null if none saved (404). Throws on other errors.
+ */
+export async function getLatestCheckinMaybe(
+  anonymousId: string,
+): Promise<CheckinDetailResponse | null> {
+  const base = apiBase();
+  if (!base) {
+    return null;
+  }
+
+  const enc = encodeURIComponent(anonymousId);
+  const res = await fetch(`${base}/checkins/${enc}`, { method: "GET" });
+
+  if (res.status === 404) {
+    return null;
+  }
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(formatErrorBody(res.status, text));
+  }
+
+  return (await res.json()) as CheckinDetailResponse;
+}
+
+/**
  * GET recent check-ins (newest first, max 5). Returns [] if none saved.
  */
 export async function getCheckinHistory(

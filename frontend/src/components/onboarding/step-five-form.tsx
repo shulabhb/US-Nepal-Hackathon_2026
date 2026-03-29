@@ -17,11 +17,12 @@ import {
 import { Label } from "@/components/ui/label";
 import type { OnboardingStep5 } from "@/lib/onboarding/step-five";
 import { emptyStep5 } from "@/lib/onboarding/step-five";
+import { dashboardHref } from "@/lib/dashboard/dashboard-tab";
 import {
   mergeOnboardingState,
   readOnboardingState,
-  setPreferDashboardAfterRecommendations,
 } from "@/lib/onboarding/storage";
+import { syncCheckinFromCompletedOnboarding } from "@/lib/onboarding/sync-checkin-from-onboarding";
 import { cn } from "@/lib/utils";
 
 export function StepFiveForm() {
@@ -33,6 +34,8 @@ export function StepFiveForm() {
   const [consent, setConsent] = React.useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = React.useState(false);
   const [hydrated, setHydrated] = React.useState(false);
+  const [finishing, setFinishing] = React.useState(false);
+  const [syncError, setSyncError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const s = readOnboardingState();
@@ -86,19 +89,26 @@ export function StepFiveForm() {
   const consentOk = !hasSensitiveText || consent === true;
   const canContinue = consentOk;
 
-  const goRecommendations = (payload: OnboardingStep5) => {
+  const finishToDashboard = async (payload: OnboardingStep5) => {
     mergeOnboardingState({
       step5: payload,
       _pending_sensitive_additional: null,
       _sensitive_step_questions: null,
     });
-    setPreferDashboardAfterRecommendations();
-    router.push("/recommendations");
+    setSyncError(null);
+    setFinishing(true);
+    const result = await syncCheckinFromCompletedOnboarding();
+    setFinishing(false);
+    if (!result.ok) {
+      setSyncError(result.error);
+      return;
+    }
+    router.replace(dashboardHref("overview"));
   };
 
   const handleSkip = () => {
     setAttemptedSubmit(false);
-    goRecommendations(emptyStep5());
+    void finishToDashboard(emptyStep5());
   };
 
   const handleContinue = () => {
@@ -107,7 +117,7 @@ export function StepFiveForm() {
       return;
     }
     setAttemptedSubmit(false);
-    goRecommendations(buildStep5Payload());
+    void finishToDashboard(buildStep5Payload());
   };
 
   if (!gateOpen || !hydrated) {
@@ -281,12 +291,22 @@ export function StepFiveForm() {
             </div>
           </div>
 
+          {syncError ? (
+            <p className="text-sm text-destructive" role="alert">
+              {syncError}{" "}
+              <span className="text-muted-foreground">
+                You can try again—your answers are still on this device.
+              </span>
+            </p>
+          ) : null}
+
           <div className="flex flex-col gap-3 border-t border-border/60 pt-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <Button
               type="button"
               variant="ghost"
               className="h-11 rounded-xl text-muted-foreground sm:order-2"
               onClick={handleSkip}
+              disabled={finishing}
             >
               Skip this step
             </Button>
@@ -294,8 +314,9 @@ export function StepFiveForm() {
               type="button"
               className="h-11 min-h-11 rounded-xl px-8 sm:order-1"
               onClick={handleContinue}
+              disabled={finishing}
             >
-              Continue to results
+              {finishing ? "Saving…" : "Continue to dashboard"}
             </Button>
           </div>
         </CardContent>

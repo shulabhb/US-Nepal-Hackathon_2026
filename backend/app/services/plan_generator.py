@@ -35,8 +35,39 @@ _PLAN_OUTPUT_SHAPE_EXAMPLE: dict[str, Any] = {
             "additional_info": "Optional extra tip, or omit this key",
         }
     ],
-    "notes": ["Optional short reminder — or use []"],
+    "notes": [
+        "First focused note",
+        "Second focused note if needed",
+    ],
 }
+
+
+def _notes_instructions(req: GeneratePlanRequest) -> str:
+    is_personal_dw = (
+        (req.plan_type or "").strip() == "personal_tasks"
+        and req.schedule_kind in ("daily", "weekly")
+    )
+    if is_personal_dw:
+        return """
+- notes: Use a JSON array of 5–12 strings (required for this plan type). Each string: one focused sentence, or two short sentences max. Non-clinical. Be specific to THIS user’s tasks and stated times—avoid vague filler.
+  MUST cover, in plain language:
+  (1) TIME REALISM: For tasks where the user gave estimated_time, comment if it seems too little or too much for what they described; if they omitted time on a heavy task, mention that gap.
+  (2) TOTAL LOAD vs HORIZON: Compare their total self-allocated time to what fits a single day (if daily) or a balanced week (if weekly), using stress/energy/sleep hints from the check-in JSON—flag overload or surprisingly light load.
+  (3) STRAIN UP / STRAIN DOWN: Name 1–2 aspects of this mix likely to increase sustained strain if unchanged, and 1–2 that plausibly reduce strain.
+  (4) BURNOUT PREVENTION: One or two concrete adjustments (pacing, boundaries, sequencing) tailored to this plan.
+  (5) RECREATION / RECOVERY: At least one specific idea (e.g. 15-min walk, short social check-in, hobby block) tied to their workload so recovery is part of the plan—not generic advice unless clearly tied to context.
+"""
+    return """
+- notes: 0–4 short strings only. Practical reminders tied to their answers. For non–personal-task plans, keep burnout commentary light—do not over-analyze; skip generic tips that don’t fit their context.
+"""
+
+
+def _time_aware_checklist_rules(req: GeneratePlanRequest) -> str:
+    if not req.user_tasks:
+        return ""
+    return """
+- TIME AWARENESS: The user gave estimated durations per task where provided. When you expand tasks into checklist_items, align each item’s time_estimate with those inputs (split across sub-steps if needed). Do not silently halve or double their stated times without reason; if you adjust, explain briefly in description or additional_info. Order steps so time totals are realistic for their daily vs weekly scope.
+"""
 
 
 def _looks_like_json_schema_echo(raw: dict[str, Any]) -> bool:
@@ -49,6 +80,58 @@ def _looks_like_json_schema_echo(raw: dict[str, Any]) -> bool:
     ):
         return True
     return False
+
+
+def _personal_tasks_block(req: GeneratePlanRequest) -> str:
+    if not req.user_tasks:
+        return ""
+    pn = (req.plan_name or "").strip()
+    sk = req.schedule_kind or ""
+    full = req.generate_full_schedule is True
+    prio_order = {"high": 0, "medium": 1, "low": 2}
+    sorted_tasks = sorted(
+        req.user_tasks,
+        key=lambda t: (prio_order.get(t.priority, 1), t.name.lower()),
+    )
+    lines = [
+        f"- [{t.priority}] {t.name} — user estimated time: "
+        f"{t.estimated_time.strip() if t.estimated_time else 'not specified'}"
+        for t in sorted_tasks
+    ]
+    horizon = (
+        "single day (today or the next waking day)"
+        if sk == "daily"
+        else "full week (spread sensibly across days; you may label items with a day hint in label or description)"
+        if sk == "weekly"
+        else "match checklist scope"
+    )
+    schedule_note = ""
+    if full:
+        schedule_note = (
+            "\nFULL SCHEDULE MODE: The user asked for a richer daily or weekly schedule. "
+            "In addition to their listed tasks (properly ordered by priority and realism), "
+            "include explicit checklist_items for: adequate rest/breaks, sleep-friendly wind-down or sleep timing, "
+            "light social connection (e.g. message someone, short chat), and gentle recovery that fits burnout strain "
+            "from the check-in—without medical claims. "
+            "You may use up to 12 checklist_items total. "
+            "Keep every item practical and non-clinical.\n"
+        )
+    else:
+        schedule_note = (
+            "\nOrder and refine the user's tasks into a sensible sequence; you may slightly rephrase labels "
+            "for clarity. Add at most 1–2 small optional steps only if essential for pacing (not required). "
+            "Use at most 8 checklist_items.\n"
+        )
+
+    name_line = f'User plan name (use for title or weave into title): "{pn}"\n' if pn else ""
+
+    return f"""
+USER-DEFINED TASKS MODE:
+{name_line}Schedule scope: {sk or "unspecified—infer briefly"} — plan for {horizon}.
+{schedule_note}
+Tasks they want included (respect all; order by priority then your judgment for flow):
+{chr(10).join(lines)}
+"""
 
 
 def _build_prompt(req: GeneratePlanRequest) -> str:
@@ -82,26 +165,31 @@ def _build_prompt(req: GeneratePlanRequest) -> str:
             "do not force-fit a preset category label beyond what fits their words.\n"
         )
 
+    personal_block = _personal_tasks_block(req)
+    max_items = 12 if (req.user_tasks and req.generate_full_schedule) else 8
+    notes_block = _notes_instructions(req)
+    time_rules = _time_aware_checklist_rules(req)
+
     return f"""You are helping with a wellness planning assistant (not clinical care).
 Produce a practical, supportive, non-medical plan. Do not diagnose, prescribe, or claim to treat conditions.
 Avoid medical certainty; use everyday language and small, realistic steps the person could try.
 Plan type requested: {req.plan_type}
-{custom_plan_note}{extras}{plan_ctx_block}
+{custom_plan_note}{extras}{plan_ctx_block}{personal_block}
 Check-in context (JSON):
 {ctx_json}
 
 Requirements:
-- title: short, encouraging
+- title: short, encouraging (if a user plan name was given, prefer incorporating it)
 - plan_type: repeat or refine "{req.plan_type}" as a short label
-- summary: 2–4 sentences, concrete and kind
-- time_horizon: e.g. "today", "this week", "next 72 hours" — match the scope of the checklist
-- checklist_items: at least 1 task, at most 8; each task MUST have:
+- summary: 2–4 sentences, concrete and kind; mention pacing/rest if full schedule was requested; for personal daily/weekly plans, briefly reflect time/load realism.
+- time_horizon: must match {"this single day" if (req.schedule_kind == "daily") else "this week" if (req.schedule_kind == "weekly") else "the checklist"} — e.g. "today", "this week"
+- checklist_items: at least 1 task, at most {max_items}; each task MUST have:
   - label: short headline (not empty)
   - description: 1–2 sentences, actionable, supportive, not medical advice
   - time_estimate: required on EVERY item—never omit; realistic duration (e.g. "~10 min", "~30 min")
   - additional_info: optional one-line extra tip (or omit / null)
   Keep labels and descriptions concise; no diagnosis or treatment claims.
-- notes: 0–4 optional brief reminders or caveats (non-clinical)
+{time_rules}{notes_block}
 """
 
 

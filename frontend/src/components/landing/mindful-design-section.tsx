@@ -20,18 +20,11 @@ export function MindfulDesignSection() {
               id="mindful-heading"
               className="font-heading mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl"
             >
-              Mental-health-aware by default
+              Respectful by default
             </h2>
-            <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
-              When someone is already stretched thin, software tone matters.
-              Burnout Radar uses supportive, non-judgmental language, avoids
-              shamey framings, and treats privacy as a core feature—not a policy
-              footnote.
-            </p>
-            <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Accessibility is part of that respect: semantic structure, readable
-              type, visible focus states, and contrast that stays legible in
-              daylight or late-night sessions.
+            <p className="mt-3 text-base leading-relaxed text-muted-foreground sm:text-lg">
+              Supportive tone, readable type, and clear focus states—because
+              bandwidth is already low when you show up here.
             </p>
           </div>
           <Card className="border-border/80 bg-card/90 shadow-sm backdrop-blur-sm">
@@ -42,12 +35,10 @@ export function MindfulDesignSection() {
                 </div>
                 <div>
                   <h3 className="font-heading text-base font-semibold text-foreground">
-                    Supportive language, always
+                    Plain, non-blaming copy
                   </h3>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    Copy is reviewed to reduce blame, catastrophizing, and
-                    comparison traps. You’re met where you are—not scored like a
-                    performance review.
+                    Written to reduce shame and comparison—not a scoreboard.
                   </p>
                 </div>
               </div>
@@ -57,12 +48,11 @@ export function MindfulDesignSection() {
                 </div>
                 <div>
                   <h3 className="font-heading text-base font-semibold text-foreground">
-                    Privacy you can feel
+                    Privacy as product
                   </h3>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    Sessions default anonymous. The goal is early support with
-                    boundaries intact—especially for students and early-career
-                    roles where reputational fear runs high.
+                    Anonymous sessions by default; you stay in control of what
+                    you share.
                   </p>
                 </div>
               </div>
@@ -72,12 +62,11 @@ export function MindfulDesignSection() {
                 </div>
                 <div>
                   <h3 className="font-heading text-base font-semibold text-foreground">
-                    Designed for emotional bandwidth
+                    Paused-friendly flow
                   </h3>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    Layouts breathe. Steps are chunked. You can pause and return
-                    without losing the thread—because exhaustion rarely cooperates
-                    with rigid flows.
+                    Chunked steps so you can stop and resume without losing the
+                    thread.
                   </p>
                 </div>
               </div>

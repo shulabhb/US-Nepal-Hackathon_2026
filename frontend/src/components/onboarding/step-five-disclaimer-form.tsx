@@ -13,16 +13,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { dashboardHref } from "@/lib/dashboard/dashboard-tab";
 import { emptyStep5 } from "@/lib/onboarding/step-five";
 import {
   mergeOnboardingState,
   readOnboardingState,
-  setPreferDashboardAfterRecommendations,
 } from "@/lib/onboarding/storage";
+import { syncCheckinFromCompletedOnboarding } from "@/lib/onboarding/sync-checkin-from-onboarding";
 
 export function StepFiveDisclaimerForm() {
   const router = useRouter();
   const [gateOpen, setGateOpen] = React.useState(false);
+  const [finishing, setFinishing] = React.useState(false);
+  const [syncError, setSyncError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const s = readOnboardingState();
@@ -55,8 +58,17 @@ export function StepFiveDisclaimerForm() {
       _pending_sensitive_additional: null,
       _sensitive_step_questions: null,
     });
-    setPreferDashboardAfterRecommendations();
-    router.push("/recommendations");
+    setSyncError(null);
+    setFinishing(true);
+    void (async () => {
+      const result = await syncCheckinFromCompletedOnboarding();
+      setFinishing(false);
+      if (!result.ok) {
+        setSyncError(result.error);
+        return;
+      }
+      router.replace(dashboardHref("overview"));
+    })();
   };
 
   const handleAccept = () => {
@@ -124,19 +136,30 @@ export function StepFiveDisclaimerForm() {
             </p>
           </div>
 
+          {syncError ? (
+            <p className="text-sm text-destructive" role="alert">
+              {syncError}{" "}
+              <span className="text-muted-foreground">
+                Try again—your answers are still on this device.
+              </span>
+            </p>
+          ) : null}
+
           <div className="flex flex-col gap-3 border-t border-border/60 pt-6 sm:flex-row sm:flex-wrap sm:items-stretch sm:justify-between">
             <Button
               type="button"
               variant="ghost"
               className="h-11 rounded-xl text-muted-foreground sm:order-2 sm:max-w-[12rem]"
               onClick={handleDecline}
+              disabled={finishing}
             >
-              No thanks — go to dashboard
+              {finishing ? "Saving…" : "No thanks — go to dashboard"}
             </Button>
             <Button
               type="button"
               className="h-11 min-h-11 rounded-xl px-8 sm:order-1 sm:flex-1 sm:max-w-md"
               onClick={handleAccept}
+              disabled={finishing}
             >
               Continue to optional questions
             </Button>

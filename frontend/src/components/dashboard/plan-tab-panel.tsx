@@ -5,6 +5,7 @@ import {
   ChevronRight,
   FolderOpen,
   Loader2,
+  Plus,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -21,23 +22,52 @@ import {
 import {
   buildPlanContextPayload,
   fieldsForPlanType,
+  hasEnoughPersonalTasksInput,
   hasEnoughPlanContext,
 } from "@/lib/dashboard/plan-context-fields";
 import {
   normalizeChecklistForApi,
   planChecklistProgress,
 } from "@/lib/dashboard/plan-checklist";
-import { deletePlan, getPlans, savePlan, updatePlanChecklist } from "@/lib/api/plans";
+import {
+  deletePlan,
+  emitDashboardPlansMutated,
+  getPlans,
+  savePlan,
+  updatePlanChecklist,
+} from "@/lib/api/plans";
 import { cn } from "@/lib/utils";
 import type {
   CheckinDetailResponse,
   GeneratedPlan,
   GeneratePlanResponse,
   PlanChecklistItem,
+  SavedPlanGenerationMeta,
   StoredPlan,
+  UserPlanTaskInput,
 } from "@/types/api";
 
+type DraftTask = {
+  localId: string;
+  name: string;
+  priority: "high" | "medium" | "low";
+  estimatedTime: string;
+};
+
+function newDraftTask(): DraftTask {
+  return {
+    localId:
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `t-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    name: "",
+    priority: "medium",
+    estimatedTime: "",
+  };
+}
+
 export const PLAN_TYPE_OPTIONS = [
+  { id: "personal_tasks", label: "My tasks (daily or weekly)" },
   { id: "stress_reset", label: "Stress reset" },
   { id: "sleep_reset", label: "Sleep reset" },
   { id: "study_plan", label: "Study plan" },
@@ -54,6 +84,20 @@ type PlanSubView = "create" | "saved";
 function planTypeLabel(id: string): string {
   const hit = PLAN_TYPE_OPTIONS.find((o) => o.id === id);
   return hit?.label ?? id.replace(/_/g, " ");
+}
+
+function personalTasksMetaFromRow(row: StoredPlan): {
+  meta: SavedPlanGenerationMeta;
+  tasks: UserPlanTaskInput[];
+} | null {
+  const raw = row.plan_meta;
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (o.version !== 1 || !Array.isArray(o.user_tasks)) return null;
+  return {
+    meta: raw as SavedPlanGenerationMeta,
+    tasks: o.user_tasks as UserPlanTaskInput[],
+  };
 }
 
 function formatSavedAt(iso: string): string {
@@ -227,14 +271,24 @@ type Props = {
 
 export function PlanTabPanel({ checkin, anonymousId }: Props) {
   const [planSubView, setPlanSubView] = React.useState<PlanSubView>("create");
-  const [planType, setPlanType] = React.useState<PlanTypeId>("stress_reset");
+  const [planType, setPlanType] = React.useState<PlanTypeId>("personal_tasks");
   const [planContextAnswers, setPlanContextAnswers] = React.useState<
     Record<string, string>
   >({});
+  const [planDisplayName, setPlanDisplayName] = React.useState("");
+  const [scheduleKind, setScheduleKind] = React.useState<"daily" | "weekly" | "">(
+    "",
+  );
+  const [draftTasks, setDraftTasks] = React.useState<DraftTask[]>([
+    newDraftTask(),
+  ]);
+  const [generateFullSchedule, setGenerateFullSchedule] = React.useState(false);
   const [userRequest, setUserRequest] = React.useState("");
   const [panel, setPanel] = React.useState<GeneratePanelState>({ status: "idle" });
   const [lastGenerated, setLastGenerated] =
     React.useState<GeneratePlanResponse | null>(null);
+  const [lastPlanMeta, setLastPlanMeta] =
+    React.useState<SavedPlanGenerationMeta | null>(null);
   const [saveState, setSaveState] = React.useState<SaveState>({ status: "idle" });
   const [savedPlans, setSavedPlans] = React.useState<StoredPlan[] | null>(null);
   const [savedListError, setSavedListError] = React.useState<string | null>(null);
@@ -270,6 +324,12 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
 
   React.useEffect(() => {
     setPlanContextAnswers({});
+    if (planType !== "personal_tasks") {
+      setPlanDisplayName("");
+      setScheduleKind("");
+      setDraftTasks([newDraftTask()]);
+      setGenerateFullSchedule(false);
+    }
   }, [planType]);
 
   React.useEffect(() => {
@@ -285,26 +345,82 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
     setPlanActionError(null);
   }, [planSubView]);
 
-  const contextOk = hasEnoughPlanContext(planType, planContextAnswers);
+  const personalOk = hasEnoughPersonalTasksInput(
+    planDisplayName,
+    scheduleKind,
+    draftTasks,
+  );
+  const presetContextOk = hasEnoughPlanContext(planType, planContextAnswers);
+  const contextOk =
+    planType === "personal_tasks" ? personalOk : presetContextOk;
 
   const runGenerate = React.useCallback(async () => {
     if (!checkin) return;
-    if (!hasEnoughPlanContext(planType, planContextAnswers)) return;
+    if (planType === "personal_tasks") {
+      if (!hasEnoughPersonalTasksInput(planDisplayName, scheduleKind, draftTasks))
+        return;
+    } else if (!hasEnoughPlanContext(planType, planContextAnswers)) {
+      return;
+    }
     setPanel({ status: "generating" });
     setSaveState({ status: "idle" });
     const plan_context = buildPlanContextPayload(planType, planContextAnswers);
+    const user_tasks =
+      planType === "personal_tasks"
+        ? draftTasks
+            .map((t) => {
+              const et = t.estimatedTime.trim();
+              return {
+                name: t.name.trim(),
+                priority: t.priority,
+                estimated_time: et.length > 0 ? et : null,
+              };
+            })
+            .filter((t) => t.name.length > 0)
+        : null;
+    const personalMeta: SavedPlanGenerationMeta | null =
+      planType === "personal_tasks" &&
+      user_tasks &&
+      user_tasks.length > 0 &&
+      scheduleKind
+        ? {
+            version: 1,
+            plan_type: planType,
+            schedule_kind: scheduleKind,
+            plan_name: planDisplayName.trim() || null,
+            generate_full_schedule: generateFullSchedule,
+            user_tasks,
+          }
+        : null;
     try {
       const data = await generatePlan({
         anonymous_id: anonymousId,
         plan_type: planType,
         user_request: userRequest.trim() || null,
         checkin_context: buildPlanCheckinContext(checkin),
-        plan_context,
+        plan_context:
+          planType === "personal_tasks" ? null : plan_context,
+        plan_name:
+          planType === "personal_tasks" ? planDisplayName.trim() : null,
+        schedule_kind:
+          planType === "personal_tasks" && scheduleKind
+            ? scheduleKind
+            : null,
+        user_tasks: user_tasks && user_tasks.length > 0 ? user_tasks : null,
+        generate_full_schedule:
+          planType === "personal_tasks" ? generateFullSchedule : false,
       });
       setPanel({ status: "idle" });
       setLastGenerated(data);
+      setLastPlanMeta(personalMeta);
       setPlanContextAnswers({});
       setUserRequest("");
+      if (planType === "personal_tasks") {
+        setPlanDisplayName("");
+        setScheduleKind("");
+        setDraftTasks([newDraftTask()]);
+        setGenerateFullSchedule(false);
+      }
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Could not generate a plan.";
@@ -316,6 +432,10 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
     planType,
     planContextAnswers,
     userRequest,
+    planDisplayName,
+    scheduleKind,
+    draftTasks,
+    generateFullSchedule,
   ]);
 
   const runSave = React.useCallback(async () => {
@@ -329,9 +449,11 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
         plan,
         model,
         source,
+        plan_meta: lastPlanMeta ?? null,
       });
       setSaveState({ status: "saved" });
       await loadSavedPlans();
+      emitDashboardPlansMutated();
     } catch (e) {
       setSaveState({
         status: "error",
@@ -339,10 +461,11 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
           e instanceof Error ? e.message : "Could not save this plan.",
       });
     }
-  }, [lastGenerated, anonymousId, checkin, loadSavedPlans]);
+  }, [lastGenerated, lastPlanMeta, anonymousId, checkin, loadSavedPlans]);
 
   const startNewPlan = React.useCallback(() => {
     setLastGenerated(null);
+    setLastPlanMeta(null);
     setSaveState({ status: "idle" });
     setPanel({ status: "idle" });
   }, []);
@@ -413,6 +536,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
           if (expandedSavedId === row.id) {
             setExpandedSavedId(null);
           }
+          emitDashboardPlansMutated();
         })
         .catch((e) => {
           setPlanActionError(
@@ -551,7 +675,227 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
                 </select>
               </div>
 
-              <div className="space-y-2.5 rounded-lg border border-border/50 bg-muted/15 px-3 py-3">
+              {planType === "personal_tasks" ? (
+                <div className="space-y-4 rounded-lg border border-border/50 bg-muted/15 px-3 py-3">
+                  <div className="space-y-1.5">
+                    <Label
+                      htmlFor="plan-display-name"
+                      className="text-sm font-medium"
+                    >
+                      Plan name <span className="text-destructive">*</span>
+                    </Label>
+                    <input
+                      id="plan-display-name"
+                      type="text"
+                      disabled={busy}
+                      value={planDisplayName}
+                      onChange={(e) => setPlanDisplayName(e.target.value)}
+                      maxLength={200}
+                      placeholder="e.g. This week’s reset"
+                      className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium">
+                      Schedule <span className="text-destructive">*</span>
+                    </span>
+                    <div
+                      className="flex flex-wrap gap-2"
+                      role="group"
+                      aria-label="Daily or weekly plan"
+                    >
+                      {(
+                        [
+                          { id: "daily" as const, label: "Daily plan" },
+                          { id: "weekly" as const, label: "Weekly plan" },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          disabled={busy}
+                          onClick={() => setScheduleKind(opt.id)}
+                          className={cn(
+                            "rounded-full border px-4 py-2 text-sm font-medium transition-colors",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            scheduleKind === opt.id
+                              ? "border-primary bg-primary/15 text-foreground"
+                              : "border-border/70 bg-background text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-end justify-between gap-2">
+                      <Label className="text-sm font-medium">
+                        Your tasks <span className="text-destructive">*</span>
+                      </Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        className="h-8 gap-1 rounded-lg text-xs"
+                        onClick={() =>
+                          setDraftTasks((prev) => [...prev, newDraftTask()])
+                        }
+                      >
+                        <Plus className="size-3.5" aria-hidden />
+                        Add task
+                      </Button>
+                    </div>
+                    <ul className="space-y-3">
+                      {draftTasks.map((task, index) => (
+                        <li
+                          key={task.localId}
+                          className="space-y-2 rounded-xl border border-border/60 bg-background/80 p-3"
+                        >
+                          <div className="space-y-1">
+                            <Label
+                              htmlFor={`task-name-${task.localId}`}
+                              className="text-xs text-muted-foreground"
+                            >
+                              Task {index + 1} name
+                            </Label>
+                            <input
+                              id={`task-name-${task.localId}`}
+                              type="text"
+                              disabled={busy}
+                              value={task.name}
+                              onChange={(e) =>
+                                setDraftTasks((prev) =>
+                                  prev.map((t) =>
+                                    t.localId === task.localId
+                                      ? { ...t, name: e.target.value }
+                                      : t,
+                                  ),
+                                )
+                              }
+                              maxLength={500}
+                              placeholder="What you want to get done"
+                              className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <Label
+                                htmlFor={`task-time-${task.localId}`}
+                                className="text-xs text-muted-foreground"
+                              >
+                                Est. time{" "}
+                                <span className="font-normal opacity-80">
+                                  (helps ordering & burnout notes)
+                                </span>
+                              </Label>
+                              <input
+                                id={`task-time-${task.localId}`}
+                                type="text"
+                                disabled={busy}
+                                value={task.estimatedTime}
+                                onChange={(e) =>
+                                  setDraftTasks((prev) =>
+                                    prev.map((t) =>
+                                      t.localId === task.localId
+                                        ? {
+                                            ...t,
+                                            estimatedTime: e.target.value,
+                                          }
+                                        : t,
+                                    ),
+                                  )
+                                }
+                                maxLength={80}
+                                placeholder="e.g. 45 min, 2h"
+                                className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                              />
+                            </div>
+                            <div className="flex w-full items-end gap-2 sm:w-auto sm:shrink-0">
+                              <div className="min-w-0 flex-1 space-y-1 sm:w-36 sm:flex-initial">
+                                <Label
+                                  htmlFor={`task-prio-${task.localId}`}
+                                  className="text-xs text-muted-foreground"
+                                >
+                                  Priority
+                                </Label>
+                                <select
+                                  id={`task-prio-${task.localId}`}
+                                  disabled={busy}
+                                  value={task.priority}
+                                  onChange={(e) =>
+                                    setDraftTasks((prev) =>
+                                      prev.map((t) =>
+                                        t.localId === task.localId
+                                          ? {
+                                              ...t,
+                                              priority: e.target
+                                                .value as DraftTask["priority"],
+                                            }
+                                          : t,
+                                      ),
+                                    )
+                                  }
+                                  className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                                >
+                                  <option value="high">High</option>
+                                  <option value="medium">Medium</option>
+                                  <option value="low">Low</option>
+                                </select>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                disabled={busy || draftTasks.length <= 1}
+                                className="size-10 shrink-0 text-muted-foreground hover:text-destructive"
+                                aria-label={`Remove task ${index + 1}`}
+                                onClick={() =>
+                                  setDraftTasks((prev) =>
+                                    prev.length <= 1
+                                      ? prev
+                                      : prev.filter(
+                                          (t) => t.localId !== task.localId,
+                                        ),
+                                  )
+                                }
+                              >
+                                <Trash2 className="size-4" aria-hidden />
+                              </Button>
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/40 bg-background/50 px-3 py-3">
+                    <input
+                      type="checkbox"
+                      disabled={busy}
+                      checked={generateFullSchedule}
+                      onChange={(e) =>
+                        setGenerateFullSchedule(e.target.checked)
+                      }
+                      className="mt-1 size-4 shrink-0 rounded border-input accent-primary"
+                    />
+                    <span className="min-w-0 text-sm leading-snug">
+                      <span className="font-medium text-foreground">
+                        Generate a full {scheduleKind === "weekly" ? "weekly" : "daily"} schedule
+                      </span>
+                      <span className="mt-0.5 block text-muted-foreground">
+                        Adds ordered steps for rest, sleep-friendly pacing,
+                        light social connection, and burnout-aware recovery
+                        (non-clinical). May produce more checklist items.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              ) : (
+                <div className="space-y-2.5 rounded-lg border border-border/50 bg-muted/15 px-3 py-3">
                   {fieldsForPlanType(planType).map((field) => (
                     <div key={field.key} className="space-y-1">
                       <Label
@@ -614,7 +958,8 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
                       )}
                     </div>
                   ))}
-              </div>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label htmlFor="plan-request" className="text-sm font-medium">
@@ -633,9 +978,11 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
 
               {!contextOk ? (
                 <p className="text-xs text-muted-foreground" role="status">
-                  {planType === "custom_plan"
-                    ? "Add a topic and at least one other field."
-                    : "Answer at least two questions above."}
+                  {planType === "personal_tasks"
+                    ? "Add a plan name, choose daily or weekly, and at least one task with a name."
+                    : planType === "custom_plan"
+                      ? "Add a topic and at least one other field."
+                      : "Answer at least two questions above."}
                 </p>
               ) : null}
 
@@ -896,6 +1243,51 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
                             Horizon <span aria-hidden>·</span>{" "}
                             {row.time_horizon}
                           </p>
+                          {(() => {
+                            const pm = personalTasksMetaFromRow(row);
+                            if (!pm) return null;
+                            const { meta, tasks } = pm;
+                            return (
+                              <div className="mt-3 rounded-lg border border-primary/20 bg-primary/[0.04] px-3 py-2.5">
+                                <p className="text-[11px] font-medium text-primary">
+                                  Your time inputs (saved)
+                                </p>
+                                {meta.schedule_kind ? (
+                                  <p className="mt-1 text-[11px] text-muted-foreground">
+                                    Scope:{" "}
+                                    {meta.schedule_kind === "daily"
+                                      ? "Daily"
+                                      : "Weekly"}
+                                    {meta.generate_full_schedule
+                                      ? " · full schedule requested"
+                                      : null}
+                                  </p>
+                                ) : null}
+                                <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                                  {tasks.map((ut, i) => (
+                                    <li key={i}>
+                                      <span className="font-medium text-foreground">
+                                        {ut.name}
+                                      </span>
+                                      <span aria-hidden> · </span>
+                                      {ut.priority} priority
+                                      {ut.estimated_time ? (
+                                        <>
+                                          <span aria-hidden> · </span>
+                                          {ut.estimated_time}
+                                        </>
+                                      ) : (
+                                        <span className="opacity-80">
+                                          {" "}
+                                          · no time estimate
+                                        </span>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            );
+                          })()}
                           <div className="mt-3">
                             <PlanProgressBar items={row.checklist_items} />
                           </div>

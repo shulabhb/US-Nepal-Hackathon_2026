@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -78,6 +78,20 @@ class GeneratedPlan(BaseModel):
     checklist_items: list[PlanChecklistItem]
     notes: list[str] = Field(default_factory=list)
 
+    @field_validator("notes", mode="before")
+    @classmethod
+    def coerce_notes_list(cls, v: object) -> list[str]:
+        if v is None:
+            return []
+        if not isinstance(v, list):
+            return []
+        out: list[str] = []
+        for item in v:
+            s = str(item).strip()
+            if s:
+                out.append(s[:2000])
+        return out[:12]
+
     @field_validator("title", "plan_type")
     @classmethod
     def strip_short_text(cls, v: str) -> str:
@@ -101,12 +115,47 @@ class GeneratedPlan(BaseModel):
         return self
 
 
+class UserPlanTaskInput(BaseModel):
+    """A task the user already intends to do — model orders and expands into checklist steps."""
+
+    name: str = Field(..., min_length=1)
+    priority: Literal["high", "medium", "low"] = "medium"
+    estimated_time: str | None = Field(
+        default=None,
+        description="User-stated duration (e.g. '45 min', '2h').",
+    )
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("must not be empty")
+        return s
+
+    @field_validator("estimated_time")
+    @classmethod
+    def strip_estimated_time(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s if s else None
+
+
 class GeneratePlanRequest(BaseModel):
     anonymous_id: str | None = None
     plan_type: str = Field(..., min_length=1)
     user_request: str | None = None
     checkin_context: dict[str, Any]
     plan_context: dict[str, str] | None = None
+    """User-chosen label for the plan (e.g. personal_tasks flow)."""
+    plan_name: str | None = None
+    """Whether the user wants a single-day or week-scoped plan."""
+    schedule_kind: Literal["daily", "weekly"] | None = None
+    """Concrete tasks the user wants included; model sequences them and may add recovery/sleep/social steps."""
+    user_tasks: list[UserPlanTaskInput] | None = None
+    """When true, model should add rest, sleep, social, and pacing blocks appropriate to the horizon."""
+    generate_full_schedule: bool = False
 
 
 class GeneratePlanResponse(BaseModel):

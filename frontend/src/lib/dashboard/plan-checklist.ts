@@ -11,7 +11,11 @@ export function planChecklistProgress(items: PlanChecklistItem[]) {
 /** First checklist row not marked complete — for chat / dashboard hints. */
 export function nextUnfinishedChecklistTask(
   items: PlanChecklistItem[],
-): { label: string; description: string | null } | null {
+): {
+  label: string;
+  description: string | null;
+  timeEstimate: string | null;
+} | null {
   const item = items.find((i) => i.completed !== true);
   if (!item) return null;
   const label = item.label?.trim() ?? "";
@@ -21,7 +25,9 @@ export function nextUnfinishedChecklistTask(
     item.description?.trim() || legacy.rationale?.trim() || "";
   const description =
     rawDesc.length > 0 ? rawDesc.slice(0, 280) : null;
-  return { label, description };
+  const te = (item.time_estimate?.trim() || "").trim();
+  const timeEstimate = te.length > 0 ? te : null;
+  return { label, description, timeEstimate };
 }
 
 function coerceItemFields(item: PlanChecklistItem) {

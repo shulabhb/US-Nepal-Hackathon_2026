@@ -6,26 +6,26 @@ import { LANDING_IDS } from "@/lib/landing-ids";
 const steps = [
   {
     step: "01",
-    title: "Share what’s been weighing on you",
-    body: "A short, structured check-in—enough context for a fair read, not a novel.",
+    title: "Check in",
+    body: "Short structured questions—not a long form.",
     icon: ClipboardList,
   },
   {
     step: "02",
-    title: "Log stress, symptoms, and sleep",
-    body: "Essential signals only. Sleep is optional but helps separate tired from depleted.",
+    title: "Stress, symptoms, sleep",
+    body: "Core signals; sleep is optional but helps.",
     icon: Brain,
   },
   {
     step: "03",
-    title: "Get a clear burnout-risk snapshot",
-    body: "A calm label and plain-language explanation—supportive, not alarmist.",
+    title: "Risk snapshot",
+    body: "Plain-language label and context—supportive, not alarmist.",
     icon: Orbit,
   },
   {
     step: "04",
-    title: "Receive practical next steps",
-    body: "Prioritized actions plus routes to care if symptoms intensify. You choose pace.",
+    title: "Next steps",
+    body: "Prioritized actions; you set the pace.",
     icon: Compass,
   },
 ] as const;
@@ -48,12 +48,11 @@ export function HowItWorksSection() {
           >
             How it works
           </h2>
-          <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Four steady beats—from “something feels off” to “here’s what I can try
-            next.” Built to stay low-friction when energy is already thin.
+          <p className="mt-3 text-base leading-relaxed text-muted-foreground sm:text-lg">
+            Four steps from check-in to suggested actions.
           </p>
         </div>
-        <ol className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <ol className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {steps.map(({ step, title, body, icon: Icon }, index) => (
             <li key={step}>
               <Card

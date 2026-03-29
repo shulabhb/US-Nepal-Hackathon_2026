@@ -9,23 +9,23 @@ import {
 const items = [
   {
     icon: ShieldCheck,
-    title: "Anonymous by design",
-    body: "No account drama. You share only what helps the snapshot stay useful.",
+    title: "Anonymous-first",
+    body: "Share only what makes the snapshot useful.",
   },
   {
     icon: MoonStar,
-    title: "Sleep-aware insights",
-    body: "Optional rhythm data—when you want it—folded into the bigger picture.",
+    title: "Sleep-aware",
+    body: "Optional rhythm when you want extra nuance.",
   },
   {
     icon: ArrowUpRight,
-    title: "Early burnout detection",
-    body: "Flags rising risk patterns while they’re still navigable, not after a crash.",
+    title: "Early signal",
+    body: "Flags strain while it’s still easier to adjust.",
   },
   {
     icon: BookOpen,
-    title: "Actionable next steps",
-    body: "Plain-language moves you can try this week—not some vague self-care list.",
+    title: "Concrete steps",
+    body: "Short list you can act on this week.",
   },
 ] as const;
 
@@ -39,13 +39,13 @@ export function TrustStrip() {
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-primary">
-              Why people open Burnout Radar
+              At a glance
             </p>
             <h2
               id="trust-heading"
               className="font-heading mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
             >
-              Private signal. Clear readout. Gentle momentum.
+              Private snapshot. Simple next moves.
             </h2>
           </div>
           <Sparkles

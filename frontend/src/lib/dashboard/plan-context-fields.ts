@@ -193,10 +193,24 @@ export function countFilledContextAnswers(
   return n;
 }
 
+/** Validation for plan type `personal_tasks` (handled in Plan tab, not plan_context fields). */
+export function hasEnoughPersonalTasksInput(
+  planName: string,
+  scheduleKind: "daily" | "weekly" | "",
+  tasks: readonly { name: string }[],
+): boolean {
+  if (!planName.trim() || !scheduleKind) return false;
+  const withNames = tasks.filter((t) => t.name.trim().length > 0);
+  return withNames.length >= 1;
+}
+
 export function hasEnoughPlanContext(
   planType: string,
   answers: Record<string, string>,
 ): boolean {
+  if (planType === "personal_tasks") {
+    return false;
+  }
   if (planType === "custom_plan") {
     const topic = (answers.plan_topic ?? "").trim();
     if (!topic) return false;

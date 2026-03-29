@@ -15,24 +15,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { getLatestCheckin, saveCheckin } from "@/lib/api/checkins";
+import { getLatestCheckin } from "@/lib/api/checkins";
+import { dashboardHref } from "@/lib/dashboard/dashboard-tab";
 import { getOrCreateAnonymousId } from "@/lib/onboarding/anonymous-id";
 import {
   clearOnboardingState,
-  clearPreferDashboardAfterRecommendations,
-  consumePreferDashboardAfterRecommendations,
-  getCheckinSyncHash,
   getOnboardingResumePath,
   readOnboardingState,
-  setCheckinSyncHash,
 } from "@/lib/onboarding/storage";
-import {
-  checkinPersistFingerprint,
-  toCheckinPayload,
-} from "@/lib/onboarding/to-checkin-payload";
-import { dashboardHref } from "@/lib/dashboard/dashboard-tab";
+import { syncCheckinFromCompletedOnboarding } from "@/lib/onboarding/sync-checkin-from-onboarding";
 import { buildRecommendations } from "@/lib/scoring/recommendation-engine";
-import { toRecommendationSnapshot } from "@/lib/scoring/recommendation-snapshot";
 import { cn } from "@/lib/utils";
 import type { CheckinDetailResponse } from "@/types/api";
 
@@ -98,48 +90,26 @@ export function RecommendationsClient() {
         });
       }
 
-      const snapshot = toRecommendationSnapshot(rec);
-      const fingerprint = checkinPersistFingerprint(state, snapshot);
       const anonymousId = getOrCreateAnonymousId();
-      let saveFailed = false;
 
-      if (getCheckinSyncHash() !== fingerprint) {
-        if (!cancelled) setSaveStatusLine("Saving your private check-in...");
-        try {
-          const body = toCheckinPayload(state, anonymousId, {
-            recommendationSnapshot: snapshot,
-          });
-          await saveCheckin(body);
-          if (!cancelled) {
-            setCheckinSyncHash(fingerprint);
-            setSaveStatusLine("Private check-in saved");
-          }
-        } catch (err) {
-          saveFailed = true;
-          if (!cancelled) {
-            setSyncNotice(
-              err instanceof Error
-                ? err.message
-                : "Could not reach the server to save your check-in.",
-            );
-            setSaveStatusLine(null);
-          }
-        }
-      } else {
-        if (!cancelled) setSaveStatusLine(null);
-      }
+      if (!cancelled) setSaveStatusLine("Saving your private check-in...");
+      const syncResult = await syncCheckinFromCompletedOnboarding();
+      if (cancelled) return;
 
-      if (cancelled || saveFailed) {
-        if (saveFailed && !cancelled) {
-          clearPreferDashboardAfterRecommendations();
-        }
+      if (!syncResult.ok) {
+        setSyncNotice(syncResult.error);
+        setSaveStatusLine(null);
         return;
       }
 
-      if (!cancelled) {
-        setFetchStatusLine("Fetching saved check-in...");
-        setFetchPreviewError(false);
+      if (syncResult.didWrite) {
+        setSaveStatusLine("Private check-in saved");
+      } else {
+        setSaveStatusLine(null);
       }
+
+      setFetchStatusLine("Fetching saved check-in...");
+      setFetchPreviewError(false);
 
       try {
         const row = await getLatestCheckin(anonymousId);
@@ -152,10 +122,6 @@ export function RecommendationsClient() {
           setFetchPreviewError(true);
           setFetchStatusLine(null);
         }
-      }
-
-      if (!cancelled && consumePreferDashboardAfterRecommendations()) {
-        router.replace(dashboardHref("overview"));
       }
     })();
 

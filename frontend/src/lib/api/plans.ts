@@ -6,6 +6,14 @@ import type {
   StoredPlan,
 } from "@/types/api";
 
+/** Overview listens so meters unlock right after save/delete without relying on tab remount. */
+export const DASHBOARD_PLANS_MUTATED_EVENT = "burnout-radar:plans-mutated";
+
+export function emitDashboardPlansMutated(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(DASHBOARD_PLANS_MUTATED_EVENT));
+}
+
 function apiBase(): string {
   const raw = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ?? "";
   return raw.replace(/\/$/, "");
@@ -54,6 +62,7 @@ export async function savePlan(
       plan: payload.plan,
       model: payload.model ?? null,
       source: payload.source ?? "local_model",
+      plan_meta: payload.plan_meta ?? null,
     }),
   });
 

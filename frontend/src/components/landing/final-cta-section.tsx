@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { buttonVariants } from "@/components/ui/button-variants";
+import { LANDING_CHECKIN_CTA } from "@/lib/landing-copy";
 import { LANDING_IDS } from "@/lib/landing-ids";
 import { cn } from "@/lib/utils";
 
@@ -21,26 +22,25 @@ export function FinalCtaSection() {
             id="cta-heading"
             className="font-heading text-balance text-3xl font-semibold tracking-tight text-foreground sm:text-4xl"
           >
-            You don’t have to white-knuckle it to the breaking point.
+            Room to adjust—before things get loud.
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-            If load, sleep, and symptoms have been drifting in the wrong direction,
-            a short anonymous check-in can surface what’s happening—and what to
-            try next—while you still have room to maneuver.
+          <p className="mx-auto mt-4 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground">
+            One check-in, a clear readout, and steps you can try while you still
+            have bandwidth.
           </p>
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <Link
               href="/onboarding"
               className={cn(
                 buttonVariants({ variant: "default", size: "lg" }),
-                "h-11 min-h-11 w-full min-w-[14rem] justify-center rounded-xl px-8 text-base shadow-sm sm:w-auto",
+                "h-11 min-h-11 w-full min-w-[14rem] justify-center rounded-xl px-8 text-base font-semibold shadow-sm sm:w-auto",
               )}
             >
-              Start Private Check-In
+              {LANDING_CHECKIN_CTA}
             </Link>
           </div>
-          <p className="mt-6 text-sm text-muted-foreground">
-            Take the time you need. There’s no timer—and no need to perform “fine.”
+          <p className="mt-5 text-sm text-muted-foreground">
+            No timer—go at your own pace.
           </p>
         </div>
       </div>

@@ -6,23 +6,23 @@ import { LANDING_IDS } from "@/lib/landing-ids";
 const contrasts = [
   {
     icon: HeartPulse,
-    title: "Not a therapy replacement",
-    body: "Burnout Radar supports early awareness and next steps. It doesn’t replace a clinician, crisis line, or emergency care when you need them.",
+    title: "Not therapy",
+    body: "Early awareness and next steps—not a clinician or crisis service.",
   },
   {
     icon: Ban,
-    title: "Not another generic mood tracker",
-    body: "The focus is burnout risk—load, sleep rhythm, symptoms—not daily emoji streaks or performative wellness.",
+    title: "Not a mood-streak app",
+    body: "Built around burnout signals: load, sleep, symptoms.",
   },
   {
     icon: ScanFace,
-    title: "Not invasive",
-    body: "No social graph mining. No endless questionnaires. Just the signals that help a snapshot stay honest and usable.",
+    title: "Minimal data",
+    body: "No feeds or social graph—only what the snapshot needs.",
   },
   {
     icon: Fingerprint,
-    title: "Early support, not surveillance",
-    body: "You get guidance meant to interrupt spirals early—before calendars, sleep, or focus fully collapse.",
+    title: "Early, not surveillance",
+    body: "Meant to catch drift while you can still steer.",
   },
 ] as const;
 
@@ -42,14 +42,13 @@ export function WhyDifferentSection() {
             id="why-heading"
             className="font-heading mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl"
           >
-            Why this is different
+            What we’re not
           </h2>
-          <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Most tools optimize for habit loops. Burnout Radar optimizes for clarity,
-            privacy, and timely support when your capacity is already limited.
+          <p className="mt-3 text-base leading-relaxed text-muted-foreground sm:text-lg">
+            Clarity and privacy first—especially when energy is thin.
           </p>
         </div>
-        <ul className="mt-12 grid gap-4 lg:grid-cols-2">
+        <ul className="mt-10 grid gap-4 lg:grid-cols-2">
           {contrasts.map(({ icon: Icon, title, body }) => (
             <li key={title}>
               <Card className="h-full border-border/80 bg-card/90 shadow-sm backdrop-blur-sm">

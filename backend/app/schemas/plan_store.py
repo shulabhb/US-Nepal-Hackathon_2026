@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -33,6 +34,10 @@ class SavePlanRequest(BaseModel):
     plan: GeneratedPlan
     model: str | None = None
     source: str = Field(default="local_model", min_length=1)
+    plan_meta: dict[str, Any] | None = Field(
+        default=None,
+        description="User inputs at generation (tasks, times, schedule) for analytics.",
+    )
 
 
 class SavePlanResponse(BaseModel):
@@ -55,6 +60,7 @@ class StoredPlan(BaseModel):
     model: str | None
     source: str
     created_at: str
+    plan_meta: dict[str, Any] | None = None
 
     @field_validator("created_at", mode="before")
     @classmethod

@@ -12,33 +12,33 @@ import { LANDING_IDS } from "@/lib/landing-ids";
 const features = [
   {
     icon: UserRound,
-    title: "Anonymous check-ins",
-    body: "Start without tying your identity to the readout. Friction stays intentionally low.",
+    title: "Anonymous check-in",
+    body: "No account required to begin.",
   },
   {
     icon: ScanLine,
-    title: "Essential signals only",
-    body: "Stress load, key symptoms, and optional sleep signals—no data hoarding.",
+    title: "Focused signals",
+    body: "Stress, symptoms, optional sleep—nothing extra.",
   },
   {
     icon: Moon,
-    title: "Sleep routine tracking",
-    body: "When you opt in, rhythm and duration inform the snapshot with extra nuance.",
+    title: "Sleep (optional)",
+    body: "Rhythm and duration when you opt in.",
   },
   {
     icon: BellRing,
-    title: "Burnout risk summary",
-    body: "A single calm frame—early, moderate, or high—that pairs risk with context.",
+    title: "Risk summary",
+    body: "One calm frame with short context.",
   },
   {
     icon: Check,
-    title: "Personalized recovery suggestions",
-    body: "Triage-style steps you can try now, scaled to how depleted you feel.",
+    title: "Suggestions",
+    body: "Steps scaled to how depleted you feel.",
   },
   {
     icon: Route,
-    title: "Support routing if needed",
-    body: "If things escalate, you’ll see clear paths—campus care, telehealth, crisis resources.",
+    title: "If you need more help",
+    body: "Pointers to care routes when intensity rises.",
   },
 ] as const;
 
@@ -58,14 +58,14 @@ export function FeatureHighlightsSection() {
             id="features-heading"
             className="font-heading mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl"
           >
-            Feature highlights
+            What you get
           </h2>
-          <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Everything here is in service of one outcome: a trustworthy early
-            readout and a humane path forward—never a pile of dashboards.
+          <p className="mt-3 text-base leading-relaxed text-muted-foreground sm:text-lg">
+            Everything serves one outcome: a useful readout and a doable path
+            forward.
           </p>
         </div>
-        <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {features.map(({ icon: Icon, title, body }) => (
             <li
               key={title}

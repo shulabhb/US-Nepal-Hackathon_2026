@@ -7,6 +7,8 @@ type Props = {
   navVariant?: "full" | "minimal";
   activeTab?: DashboardTabId;
   onRetake?: () => void;
+  /** When false, nav shows “Add a check-in”; when true, recheck prompt + “Check in again”. */
+  hasSavedCheckin?: boolean;
   className?: string;
   /**
    * When true, the shell is exactly one viewport tall and does not grow with
@@ -21,6 +23,7 @@ export function AppShell({
   navVariant = "full",
   activeTab = "overview",
   onRetake,
+  hasSavedCheckin = false,
   className,
   viewportFill = false,
 }: Props) {
@@ -42,6 +45,7 @@ export function AppShell({
         variant={navVariant}
         activeTab={navVariant === "full" ? activeTab : undefined}
         onRetake={onRetake}
+        hasSavedCheckin={hasSavedCheckin}
         className={viewportFill ? "shrink-0" : undefined}
       />
       {viewportFill ? (

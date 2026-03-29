@@ -7,6 +7,22 @@ from app.schemas.plan import coerce_checklist_item_from_stored
 from app.schemas.plan_store import SavePlanRequest, StoredPlan, UpdatePlanChecklistRequest
 
 
+def _is_missing_plan_meta_column_error(exc: BaseException) -> bool:
+    """PostgREST PGRST204 when `plan_meta` has not been migrated yet."""
+    text = str(exc).lower()
+    if "plan_meta" not in text:
+        return False
+    return (
+        "could not find" in text
+        or "pgrst204" in text
+        or "schema cache" in text
+    )
+
+
+"""Set False after first Supabase error: column `plan_meta` missing on `plans`."""
+_plan_meta_column_usable: bool = True
+
+
 class PlanPersistenceError(Exception):
     """Raised when Supabase is misconfigured or the query fails."""
 
@@ -26,6 +42,7 @@ def _require_client():
 
 def save_plan(body: SavePlanRequest) -> str:
     """Insert one plan row; returns new id as string."""
+    global _plan_meta_column_usable
     client = _require_client()
     p = body.plan
     row = {
@@ -42,10 +59,30 @@ def save_plan(body: SavePlanRequest) -> str:
         "model": body.model,
         "source": body.source,
     }
+    if body.plan_meta is not None:
+        row["plan_meta"] = body.plan_meta
+
     try:
         res = client.table("plans").insert(row).execute()
     except Exception as exc:  # pragma: no cover
-        raise PlanPersistenceError(f"Supabase insert failed: {exc}") from exc
+        if (
+            body.plan_meta is not None
+            and "plan_meta" in row
+            and _is_missing_plan_meta_column_error(exc)
+        ):
+            _plan_meta_column_usable = False
+            row_fallback = {k: v for k, v in row.items() if k != "plan_meta"}
+            try:
+                res = client.table("plans").insert(row_fallback).execute()
+            except Exception as exc2:
+                raise PlanPersistenceError(
+                    f"Supabase insert failed: {exc2}",
+                ) from exc2
+        else:
+            raise PlanPersistenceError(f"Supabase insert failed: {exc}") from exc
+    else:
+        if body.plan_meta is not None:
+            _plan_meta_column_usable = True
 
     if not res.data:
         raise PlanPersistenceError("Supabase insert returned no row.")
@@ -55,10 +92,35 @@ def save_plan(body: SavePlanRequest) -> str:
     return str(raw_id)
 
 
-_PLANS_SELECT = (
-  "id,anonymous_id,source_checkin_id,plan_type,title,summary,time_horizon,"
+_PLANS_SELECT_WITH_META = (
+    "id,anonymous_id,source_checkin_id,plan_type,title,summary,time_horizon,"
+    "checklist_items,notes,model,source,created_at,plan_meta"
+)
+_PLANS_SELECT_WITHOUT_META = (
+    "id,anonymous_id,source_checkin_id,plan_type,title,summary,time_horizon,"
     "checklist_items,notes,model,source,created_at"
 )
+
+
+def _plans_select_columns() -> str:
+    return (
+        _PLANS_SELECT_WITH_META
+        if _plan_meta_column_usable
+        else _PLANS_SELECT_WITHOUT_META
+    )
+
+
+def _execute_plan_select(client, builder):
+    """Run a plans SELECT; fall back without plan_meta if the column is missing."""
+    global _plan_meta_column_usable
+    cols = _plans_select_columns()
+    try:
+        return builder(cols).execute()
+    except Exception as exc:  # pragma: no cover
+        if _plan_meta_column_usable and _is_missing_plan_meta_column_error(exc):
+            _plan_meta_column_usable = False
+            return builder(_PLANS_SELECT_WITHOUT_META).execute()
+        raise
 
 
 def _row_to_stored(row: dict) -> StoredPlan:
@@ -74,6 +136,8 @@ def _row_to_stored(row: dict) -> StoredPlan:
         notes = []
 
     sid = row.get("source_checkin_id")
+    pm = row.get("plan_meta")
+    plan_meta = pm if isinstance(pm, dict) else None
     return StoredPlan(
         id=str(row["id"]),
         anonymous_id=str(row["anonymous_id"]),
@@ -87,6 +151,7 @@ def _row_to_stored(row: dict) -> StoredPlan:
         model=str(row["model"]) if row.get("model") is not None else None,
         source=str(row.get("source") or "local_model"),
         created_at=row["created_at"],
+        plan_meta=plan_meta,
     )
 
 
@@ -98,13 +163,13 @@ def fetch_recent_plans(anonymous_id: str, limit: int = 10) -> list[StoredPlan]:
         return []
 
     try:
-        res = (
-            client.table("plans")
-            .select(_PLANS_SELECT)
+        res = _execute_plan_select(
+            client,
+            lambda cols: client.table("plans")
+            .select(cols)
             .eq("anonymous_id", aid)
             .order("created_at", desc=True)
-            .limit(limit)
-            .execute()
+            .limit(limit),
         )
     except Exception as exc:  # pragma: no cover
         raise PlanPersistenceError(f"Supabase query failed: {exc}") from exc
@@ -126,13 +191,13 @@ def update_plan_checklist(
     if not pid or not aid:
         raise PlanNotFoundError()
 
-    check = (
-        client.table("plans")
-        .select(_PLANS_SELECT)
+    check = _execute_plan_select(
+        client,
+        lambda cols: client.table("plans")
+        .select(cols)
         .eq("id", pid)
         .eq("anonymous_id", aid)
-        .limit(1)
-        .execute()
+        .limit(1),
     )
     if not check.data:
         raise PlanNotFoundError()
@@ -145,13 +210,13 @@ def update_plan_checklist(
     except Exception as exc:  # pragma: no cover
         raise PlanPersistenceError(f"Supabase update failed: {exc}") from exc
 
-    ref = (
-        client.table("plans")
-        .select(_PLANS_SELECT)
+    ref = _execute_plan_select(
+        client,
+        lambda cols: client.table("plans")
+        .select(cols)
         .eq("id", pid)
         .eq("anonymous_id", aid)
-        .limit(1)
-        .execute()
+        .limit(1),
     )
     if not ref.data:
         raise PlanPersistenceError("Could not reload plan after update.")
