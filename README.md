@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>🔋 Burnout Radar</h1>
+  <h1>🔋 Burnout Radar By Team All Nighters</h1>
   <p><strong>Check your strain before you make your next plans. 100% Anonymous.</strong></p>
   <p>
     <img src="https://img.shields.io/badge/Frontend-Next.js_16-black?style=for-the-badge&logo=next.js" alt="Next.js" />
@@ -118,3 +118,4 @@ Open your browser and navigate to:
 **👉 [http://localhost:3000](http://localhost:3000)**
 
 You can now use Burnout Radar seamlessly! Data will flow from your browser, through FastAPI, query your privacy-secured Supabase, and interface with your localized `phi4-mini` AI.
+
