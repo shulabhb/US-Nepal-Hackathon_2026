@@ -115,6 +115,28 @@ export async function getLatestCheckinMaybe(
 }
 
 /**
+ * DELETE all check-ins and plans for this device id (opaque anonymous_id).
+ */
+export async function deleteDeviceData(anonymousId: string): Promise<void> {
+  const base = apiBase();
+  if (!base) {
+    throw new Error(
+      "API URL not configured. Set NEXT_PUBLIC_API_BASE_URL in .env.local.",
+    );
+  }
+
+  const enc = encodeURIComponent(anonymousId);
+  const res = await fetch(`${base}/checkins/${enc}/device-data`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(formatErrorBody(res.status, text));
+  }
+}
+
+/**
  * GET recent check-ins (newest first, max 5). Returns [] if none saved.
  */
 export async function getCheckinHistory(

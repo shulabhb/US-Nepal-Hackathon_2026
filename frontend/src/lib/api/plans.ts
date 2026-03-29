@@ -105,12 +105,13 @@ export async function getPlans(anonymousId: string): Promise<StoredPlan[]> {
 }
 
 /**
- * PATCH /plans/{plan_id} — replace checklist_items (completion state).
+ * PATCH /plans/{plan_id} — replace checklist_items; optional `plan_meta` shallow-merge.
  */
 export async function updatePlanChecklist(
   planId: string,
   anonymousId: string,
   checklistItems: PlanChecklistItem[],
+  planMetaPatch?: Record<string, unknown> | null,
 ): Promise<StoredPlan> {
   const base = apiBase();
   if (!base) {
@@ -119,15 +120,20 @@ export async function updatePlanChecklist(
     );
   }
 
+  const body: Record<string, unknown> = {
+    anonymous_id: anonymousId,
+    checklist_items: checklistItems,
+  };
+  if (planMetaPatch != null && Object.keys(planMetaPatch).length > 0) {
+    body.plan_meta = planMetaPatch;
+  }
+
   const res = await fetch(
     `${base}/plans/${encodeURIComponent(planId)}`,
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        anonymous_id: anonymousId,
-        checklist_items: checklistItems,
-      }),
+      body: JSON.stringify(body),
     },
   );
 

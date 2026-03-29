@@ -167,3 +167,19 @@ def fetch_latest_checkin(anonymous_id: str) -> CheckinDetailResponse | None:
     row = dict(res.data[0])
     row["additional_context"] = _extract_additional_context(row.get("raw_payload"))
     return CheckinDetailResponse.model_validate(row)
+
+
+def delete_all_checkins_for_anonymous(anonymous_id: str) -> int:
+    """Remove every check-in row for this opaque client id. Returns rows removed (best-effort)."""
+    client = _require_client()
+    aid = anonymous_id.strip()
+    if not aid:
+        return 0
+    try:
+        res = client.table("checkins").delete().eq("anonymous_id", aid).execute()
+    except Exception as exc:  # pragma: no cover
+        raise CheckinPersistenceError(f"Supabase delete failed: {exc}") from exc
+    data = res.data
+    if isinstance(data, list):
+        return len(data)
+    return 0

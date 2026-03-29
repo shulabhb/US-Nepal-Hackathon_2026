@@ -2,6 +2,7 @@
 
 import {
   AlertCircle,
+  Check,
   FolderOpen,
   Loader2,
   Plus,
@@ -12,6 +13,7 @@ import Link from "next/link";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
@@ -19,7 +21,10 @@ import {
   generatePlan,
 } from "@/lib/api/ai";
 import { buildBurnoutChatContext } from "@/lib/dashboard/chat-context";
-import { buildBurnoutViewModel } from "@/lib/burnout/burnout-view-model";
+import {
+  buildDashboardAlignedBurnoutViewModel,
+  isPlanMarkedCompleteByUser,
+} from "@/lib/burnout/burnout-view-model";
 import {
   buildPlanContextPayload,
   fieldsForPlanType,
@@ -32,6 +37,11 @@ import {
   normalizeChecklistForApi,
   planChecklistProgress,
 } from "@/lib/dashboard/plan-checklist";
+import { planProgressForDisplay } from "@/lib/dashboard/plan-progress-display";
+import {
+  DASHBOARD_RECENT_PLANS_LIMIT,
+  recentPlansForDashboard,
+} from "@/lib/dashboard/recent-plans";
 import {
   deletePlan,
   emitDashboardPlansMutated,
@@ -104,22 +114,46 @@ function formatSavedAt(iso: string): string {
 function PlanProgressBar({
   items,
   compact,
+  markedPlanComplete,
 }: {
   items: PlanChecklistItem[];
   compact?: boolean;
+  /** User marked the whole plan complete — emerald bar + label. */
+  markedPlanComplete?: boolean;
 }) {
-  const { completed, total, percent } = planChecklistProgress(items);
-  if (total === 0) return null;
+  const raw = planChecklistProgress(items);
+  if (raw.total === 0) return null;
+  const doneCelebration = markedPlanComplete === true;
+  const completed = doneCelebration ? raw.total : raw.completed;
+  const total = raw.total;
+  const percent = doneCelebration ? 100 : raw.percent;
   return (
     <div className={cn("space-y-1.5", compact && "space-y-1")}>
       <div
         className={cn(
-          "flex items-center justify-between gap-2 text-muted-foreground",
+          "flex items-center justify-between gap-2",
           compact ? "text-[10px]" : "text-xs",
+          doneCelebration
+            ? "text-emerald-700 dark:text-emerald-400"
+            : "text-muted-foreground",
         )}
       >
-        <span>
-          {compact ? (
+        <span className="inline-flex items-center gap-1.5">
+          {doneCelebration ? (
+            <>
+              <Check
+                className={cn(
+                  "shrink-0 text-emerald-600 dark:text-emerald-400",
+                  compact ? "size-3" : "size-3.5",
+                )}
+                strokeWidth={2.5}
+                aria-hidden
+              />
+              <span className="font-medium">
+                {compact ? "Plan done" : "Plan marked complete"}
+              </span>
+            </>
+          ) : compact ? (
             <>
               {completed} of {total} complete
             </>
@@ -129,7 +163,16 @@ function PlanProgressBar({
             </>
           )}
         </span>
-        <span className="tabular-nums font-medium text-foreground">{percent}%</span>
+        <span
+          className={cn(
+            "tabular-nums font-medium",
+            doneCelebration
+              ? "text-emerald-800 dark:text-emerald-300"
+              : "text-foreground",
+          )}
+        >
+          {percent}%
+        </span>
       </div>
       <div
         className={cn(
@@ -138,7 +181,10 @@ function PlanProgressBar({
         )}
       >
         <div
-          className="h-full rounded-full bg-primary/80 transition-[width] duration-300 ease-out"
+          className={cn(
+            "h-full rounded-full transition-[width] duration-300 ease-out",
+            doneCelebration ? "bg-emerald-500/90" : "bg-primary/80",
+          )}
           style={{ width: `${percent}%` }}
         />
       </div>
@@ -167,13 +213,19 @@ function PlanTaskList({
   items,
   interactive,
   onToggleChecklistItem,
+  planMarkedComplete,
 }: {
   items: PlanChecklistItem[];
   interactive?: boolean;
   onToggleChecklistItem?: (index: number) => void;
+  /** Whole plan marked done — green ticks, all rows struck through, no toggling. */
+  planMarkedComplete?: boolean;
 }) {
+  const lockedComplete = planMarkedComplete === true;
   const done =
-    interactive === true && typeof onToggleChecklistItem === "function";
+    !lockedComplete &&
+    interactive === true &&
+    typeof onToggleChecklistItem === "function";
 
   if (items.length === 0) {
     return (
@@ -182,19 +234,37 @@ function PlanTaskList({
   }
 
   return (
-    <ul className="divide-y divide-border/40" aria-label="Tasks">
+    <ul
+      className={cn("divide-y divide-border/40", lockedComplete && "select-none")}
+      aria-label="Tasks"
+    >
       {items.map((item, i) => {
         const t = taskForDisplay(item);
         const isComplete = item.completed === true;
+        const strikeAll = lockedComplete;
+        const strikeRow = strikeAll || isComplete;
         return (
           <li
             key={`${t.label}-${i}`}
+            aria-label={
+              lockedComplete ? `Completed: ${t.label}` : undefined
+            }
             className={cn(
               "flex gap-2.5 py-2.5 first:pt-0 last:pb-0",
-              isComplete && "opacity-80",
+              !lockedComplete && isComplete && "opacity-80",
             )}
           >
-            {done ? (
+            {lockedComplete ? (
+              <span
+                className="mt-0.5 flex size-4 shrink-0 items-center justify-center"
+                aria-hidden
+              >
+                <Check
+                  className="size-4 text-emerald-600 dark:text-emerald-400"
+                  strokeWidth={2.5}
+                />
+              </span>
+            ) : done ? (
               <input
                 type="checkbox"
                 checked={isComplete}
@@ -213,27 +283,39 @@ function PlanTaskList({
                 <p
                   className={cn(
                     "text-sm font-medium leading-snug text-foreground",
-                    isComplete &&
+                    strikeRow &&
                       "line-through decoration-muted-foreground/70",
                   )}
                 >
                   {t.label}
                 </p>
-                <span className="shrink-0 rounded-md bg-muted/50 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
+                <span
+                  className={cn(
+                    "shrink-0 rounded-md bg-muted/50 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground",
+                    strikeAll &&
+                      "line-through decoration-muted-foreground/60",
+                  )}
+                >
                   {t.timeEstimate}
                 </span>
               </div>
               <p
                 className={cn(
                   "text-xs leading-relaxed text-muted-foreground",
-                  isComplete &&
+                  strikeRow &&
                     "line-through decoration-muted-foreground/50",
                 )}
               >
                 {t.description}
               </p>
               {t.additionalInfo ? (
-                <p className="text-[11px] leading-snug text-muted-foreground/80">
+                <p
+                  className={cn(
+                    "text-[11px] leading-snug text-muted-foreground/80",
+                    strikeAll &&
+                      "line-through decoration-muted-foreground/55",
+                  )}
+                >
                   {t.additionalInfo}
                 </p>
               ) : null}
@@ -290,6 +372,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
   const [checklistSyncError, setChecklistSyncError] = React.useState<
     string | null
   >(null);
+  const [markCompleteBusy, setMarkCompleteBusy] = React.useState(false);
   const [planActionMessage, setPlanActionMessage] = React.useState<
     string | null
   >(null);
@@ -314,6 +397,11 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
     void loadSavedPlans();
   }, [loadSavedPlans]);
 
+  const recentPlans = React.useMemo(
+    () => recentPlansForDashboard(savedPlans ?? []),
+    [savedPlans],
+  );
+
   React.useEffect(() => {
     setPlanContextAnswers({});
     if (planType !== "personal_tasks") {
@@ -329,9 +417,10 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
       setSelectedSavedPlanId(null);
       return;
     }
+    const recent = recentPlansForDashboard(savedPlans);
     setSelectedSavedPlanId((prev) => {
-      if (prev != null && savedPlans.some((p) => p.id === prev)) return prev;
-      return savedPlans[0]?.id ?? null;
+      if (prev != null && recent.some((p) => p.id === prev)) return prev;
+      return recent[0]?.id ?? null;
     });
   }, [savedPlans]);
 
@@ -388,9 +477,9 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
           }
         : null;
     try {
-      const burnoutModel = buildBurnoutViewModel(checkin, {
+      const burnoutModel = buildDashboardAlignedBurnoutViewModel(checkin, {
         previousCheckin: null,
-        latestPlanChecklist: savedPlans?.[0]?.checklist_items ?? null,
+        plans: savedPlans ?? [],
       });
       const data = await generatePlan({
         anonymous_id: anonymousId,
@@ -487,6 +576,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
       if (!selectedSavedPlanId || !savedPlans) return;
       const row = savedPlans.find((p) => p.id === selectedSavedPlanId);
       if (!row) return;
+      if (isPlanMarkedCompleteByUser(row)) return;
       const prevItems = row.checklist_items.map((x) => ({ ...x }));
       const next = prevItems.map((it, j) =>
         j === index ? { ...it, completed: !(it.completed === true) } : it,
@@ -519,6 +609,42 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
     },
     [selectedSavedPlanId, savedPlans, anonymousId],
   );
+
+  const markPlanComplete = React.useCallback(async () => {
+    if (!selectedSavedPlanId || !savedPlans) return;
+    const row = savedPlans.find((p) => p.id === selectedSavedPlanId);
+    if (!row) return;
+    const pr = planChecklistProgress(row.checklist_items);
+    if (pr.total === 0 || pr.completed !== pr.total) return;
+    if (isPlanMarkedCompleteByUser(row)) return;
+    setMarkCompleteBusy(true);
+    setChecklistSyncError(null);
+    try {
+      const baseMeta =
+        row.plan_meta && typeof row.plan_meta === "object"
+          ? { ...(row.plan_meta as Record<string, unknown>) }
+          : {};
+      const patch = {
+        ...baseMeta,
+        marked_complete_by_user: true,
+        marked_complete_at: new Date().toISOString(),
+      };
+      const updated = await updatePlanChecklist(
+        row.id,
+        anonymousId,
+        normalizeChecklistForApi(row.checklist_items),
+        patch,
+      );
+      setSavedPlans((sp) =>
+        sp?.map((p) => (p.id === row.id ? updated : p)) ?? null,
+      );
+      emitDashboardPlansMutated();
+    } catch {
+      setChecklistSyncError("Couldn’t mark plan complete. Try again.");
+    } finally {
+      setMarkCompleteBusy(false);
+    }
+  }, [selectedSavedPlanId, savedPlans, anonymousId]);
 
   const confirmAndDeletePlan = React.useCallback(
     (row: StoredPlan) => {
@@ -566,9 +692,15 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
             </p>
           </CardHeader>
           <CardContent className="pt-2">
-            <Button asChild variant="outline" className="rounded-xl">
-              <Link href="/recommendations">Go to recommendations</Link>
-            </Button>
+            <Link
+              href="/recommendations"
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "inline-flex rounded-xl",
+              )}
+            >
+              Go to recommendations
+            </Link>
           </CardContent>
         </Card>
       </div>
@@ -1171,48 +1303,77 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
               <div className="flex flex-col gap-5 md:flex-row md:items-start md:gap-0">
                 <aside
                   className="w-full shrink-0 md:w-[13.75rem] md:border-r md:border-border/45 md:pr-4"
-                  aria-label="Plan list"
+                  aria-label={`Recent saved plans, newest first — ${DASHBOARD_RECENT_PLANS_LIMIT} shown`}
                 >
                   <ul className="flex flex-row gap-2 overflow-x-auto pb-1 md:flex-col md:gap-1.5 md:overflow-visible md:pb-0">
-                    {savedPlans.map((row) => {
+                    {recentPlans.map((row) => {
                       const selected = row.id === selectedSavedPlanId;
-                      const { percent } = planChecklistProgress(
-                        row.checklist_items,
-                      );
+                      const { percent } = planProgressForDisplay(row);
+                      const planMarkedDone = isPlanMarkedCompleteByUser(row);
                       return (
                         <li key={row.id} className="min-w-[11rem] shrink-0 md:min-w-0">
                           <button
                             type="button"
+                            title={
+                              planMarkedDone
+                                ? "Marked complete"
+                                : undefined
+                            }
                             onClick={() => {
                               setSelectedSavedPlanId(row.id);
                               setChecklistSyncError(null);
                             }}
                             aria-current={selected ? "true" : undefined}
                             className={cn(
-                              "w-full rounded-xl border px-3 py-2.5 text-left transition-colors",
+                              "flex w-full gap-2 rounded-xl border py-2.5 pl-2 pr-3 text-left transition-colors",
                               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                               selected
                                 ? "border-primary/45 bg-primary/[0.07] shadow-sm"
                                 : "border-border/55 bg-card/45 hover:border-border hover:bg-card/70",
                             )}
                           >
-                            <p className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
-                              {row.title}
-                            </p>
-                            <p className="mt-1 text-[10px] text-muted-foreground">
-                              <span className="tabular-nums font-medium text-foreground/90">
-                                {percent}%
-                              </span>
-                              <span aria-hidden> · </span>
-                              <span className="line-clamp-1">
-                                {planTypeLabel(row.plan_type)}
-                              </span>
-                            </p>
+                            <span
+                              className={cn(
+                                "mt-0.5 mb-0.5 w-1 shrink-0 self-stretch rounded-full",
+                                planMarkedDone
+                                  ? "bg-emerald-500"
+                                  : "bg-muted/50",
+                              )}
+                              aria-hidden
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
+                                {row.title}
+                              </p>
+                              <p className="mt-1 text-[10px] text-muted-foreground">
+                                <span
+                                  className={cn(
+                                    "tabular-nums font-medium",
+                                    planMarkedDone
+                                      ? "text-emerald-700 dark:text-emerald-400"
+                                      : "text-foreground/90",
+                                  )}
+                                >
+                                  {percent}%
+                                </span>
+                                <span aria-hidden> · </span>
+                                <span className="line-clamp-1">
+                                  {planTypeLabel(row.plan_type)}
+                                </span>
+                              </p>
+                            </div>
                           </button>
                         </li>
                       );
                     })}
                   </ul>
+                  {savedPlans.length > DASHBOARD_RECENT_PLANS_LIMIT ? (
+                    <p className="mt-2 text-[10px] leading-snug text-muted-foreground/90 md:px-0.5">
+                      +
+                      {savedPlans.length - DASHBOARD_RECENT_PLANS_LIMIT} more
+                      saved — same newest-first order as the overview.
+                    </p>
+                  ) : null}
                   <Button
                     type="button"
                     variant="outline"
@@ -1253,6 +1414,8 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
                         onDelete={confirmAndDeletePlan}
                         checklistSyncError={checklistSyncError}
                         onToggleChecklistItem={toggleSavedChecklistItem}
+                        onMarkPlanComplete={markPlanComplete}
+                        markCompleteBusy={markCompleteBusy}
                       />
                     );
                   })()}
@@ -1271,12 +1434,22 @@ function SavedPlanDetailView({
   onDelete,
   checklistSyncError,
   onToggleChecklistItem,
+  onMarkPlanComplete,
+  markCompleteBusy,
 }: {
   row: StoredPlan;
   onDelete: (row: StoredPlan) => void;
   checklistSyncError: string | null;
   onToggleChecklistItem: (index: number) => void;
+  onMarkPlanComplete: () => void;
+  markCompleteBusy: boolean;
 }) {
+  const rawChecklistProgress = planChecklistProgress(row.checklist_items);
+  const showMarkComplete =
+    rawChecklistProgress.total > 0 &&
+    rawChecklistProgress.completed === rawChecklistProgress.total &&
+    !isPlanMarkedCompleteByUser(row);
+  const markedComplete = isPlanMarkedCompleteByUser(row);
   return (
     <div className="rounded-2xl border border-border/60 bg-card/50 p-4 shadow-sm sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1352,7 +1525,10 @@ function SavedPlanDetailView({
       })()}
 
       <div className="mt-4">
-        <PlanProgressBar items={row.checklist_items} />
+        <PlanProgressBar
+          items={row.checklist_items}
+          markedPlanComplete={markedComplete}
+        />
       </div>
       {checklistSyncError ? (
         <p className="mt-1.5 text-xs text-destructive" role="alert">
@@ -1362,10 +1538,42 @@ function SavedPlanDetailView({
       <div className="mt-3">
         <PlanTaskList
           items={row.checklist_items}
-          interactive
+          interactive={!markedComplete}
           onToggleChecklistItem={onToggleChecklistItem}
+          planMarkedComplete={markedComplete}
         />
       </div>
+      {showMarkComplete ? (
+        <div className="mt-4 rounded-xl border border-primary/25 bg-primary/[0.06] px-3 py-3">
+          <p className="text-sm text-foreground">
+            All steps are checked off. Mark this plan complete to align your
+            overview strain with the &quot;with your plan&quot; level (until you
+            add a newer plan).
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            className="mt-2 rounded-lg"
+            disabled={markCompleteBusy}
+            onClick={() => onMarkPlanComplete()}
+          >
+            {markCompleteBusy ? (
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+                Saving…
+              </>
+            ) : (
+              "Mark plan as completed"
+            )}
+          </Button>
+        </div>
+      ) : null}
+      {markedComplete ? (
+        <p className="mt-3 text-xs text-muted-foreground">
+          This plan is marked complete. Burnout overview uses the eased strain
+          readout for your latest plan (rule-based, not clinical).
+        </p>
+      ) : null}
       {row.notes?.length ? (
         <div className="mt-3">
           <p className="mb-1 text-[11px] font-medium text-muted-foreground">

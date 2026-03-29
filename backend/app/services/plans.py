@@ -184,7 +184,8 @@ def update_plan_checklist(
     plan_id: str,
     body: UpdatePlanChecklistRequest,
 ) -> StoredPlan:
-    """Replace checklist_items jsonb for one plan owned by anonymous_id."""
+    """Replace checklist_items jsonb; optionally merge plan_meta."""
+    global _plan_meta_column_usable
     client = _require_client()
     pid = plan_id.strip()
     aid = body.anonymous_id.strip()
@@ -202,13 +203,36 @@ def update_plan_checklist(
     if not check.data:
         raise PlanNotFoundError()
 
+    row0 = dict(check.data[0])
     payload = [i.model_dump() for i in body.checklist_items]
+    update_row: dict[str, object] = {"checklist_items": payload}
+    if body.plan_meta is not None and _plan_meta_column_usable:
+        existing = row0.get("plan_meta")
+        if not isinstance(existing, dict):
+            existing = {}
+        update_row["plan_meta"] = {**existing, **body.plan_meta}
+
     try:
-        client.table("plans").update({"checklist_items": payload}).eq(
-            "id", pid
-        ).eq("anonymous_id", aid).execute()
+        client.table("plans").update(update_row).eq("id", pid).eq(
+            "anonymous_id", aid
+        ).execute()
     except Exception as exc:  # pragma: no cover
-        raise PlanPersistenceError(f"Supabase update failed: {exc}") from exc
+        if (
+            body.plan_meta is not None
+            and "plan_meta" in update_row
+            and _is_missing_plan_meta_column_error(exc)
+        ):
+            _plan_meta_column_usable = False
+            try:
+                client.table("plans").update({"checklist_items": payload}).eq(
+                    "id", pid
+                ).eq("anonymous_id", aid).execute()
+            except Exception as exc2:
+                raise PlanPersistenceError(
+                    f"Supabase update failed: {exc2}",
+                ) from exc2
+        else:
+            raise PlanPersistenceError(f"Supabase update failed: {exc}") from exc
 
     ref = _execute_plan_select(
         client,
@@ -244,5 +268,17 @@ def delete_plan(plan_id: str, anonymous_id: str) -> None:
 
     try:
         client.table("plans").delete().eq("id", pid).eq("anonymous_id", aid).execute()
+    except Exception as exc:  # pragma: no cover
+        raise PlanPersistenceError(f"Supabase delete failed: {exc}") from exc
+
+
+def delete_all_plans_for_anonymous(anonymous_id: str) -> None:
+    """Remove every saved plan for this opaque client id."""
+    client = _require_client()
+    aid = anonymous_id.strip()
+    if not aid:
+        return
+    try:
+        client.table("plans").delete().eq("anonymous_id", aid).execute()
     except Exception as exc:  # pragma: no cover
         raise PlanPersistenceError(f"Supabase delete failed: {exc}") from exc

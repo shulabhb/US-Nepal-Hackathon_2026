@@ -3,6 +3,11 @@
  * Non-clinical, deterministic — not a diagnosis.
  */
 
+import {
+  personalTasksBlockFromSinglePlan,
+  projectStrainFromTaskBlock,
+  parseEstimatedMinutesToNumber,
+} from "@/lib/dashboard/burnout-projection";
 import { planChecklistProgress } from "@/lib/dashboard/plan-checklist";
 import { parseIntakeFromCheckin } from "@/lib/dashboard/checkin-view-model";
 import type {
@@ -118,13 +123,90 @@ function consistencyStrain(c: string): number {
   return 36;
 }
 
-function planFollowThroughStrain(items: PlanChecklistItem[] | null): number {
-  if (!items?.length || items.length < 3) return 0;
-  const { percent } = planChecklistProgress(items);
-  if (percent >= 55) return 0;
-  if (percent >= 35) return 14;
-  if (percent >= 20) return 26;
-  return 36;
+/** School/work-style cues in checklist text — pending items add anticipatory load. */
+const PLAN_LOAD_KEYWORDS =
+  /\b(homework|assignment|assignments|exam|study|studying|essay|essays|project|projects|deadline|application|applications|interview|course|class|classes|midterm|final|thesis|dissertation|problem\s*set|pset|quiz|lecture|textbook|paper\s+due|gpa|job\s+search|leetcode|recruiter|onsite|behavioral\s+prep|cover\s+letter|portfolio)\b/i;
+
+function planItemTextBlob(item: PlanChecklistItem): string {
+  const legacy = item as PlanChecklistItem & { rationale?: string | null };
+  return [
+    item.label,
+    item.description,
+    legacy.rationale,
+    item.additional_info,
+    item.time_estimate,
+  ]
+    .filter((x): x is string => typeof x === "string" && x.length > 0)
+    .join(" ")
+    .toLowerCase();
+}
+
+/**
+ * Heavier time estimates and study/work keywords raise strain for incomplete steps.
+ */
+function pendingItemSeverityMultiplier(item: PlanChecklistItem): number {
+  const mins = parseEstimatedMinutesToNumber(item.time_estimate ?? null);
+  let timeFactor = 1;
+  if (mins < 20) timeFactor = 0.86;
+  else if (mins < 45) timeFactor = 1;
+  else if (mins < 90) timeFactor = 1.12;
+  else timeFactor = 1.28;
+
+  const blob = planItemTextBlob(item);
+  let kw = 1;
+  if (PLAN_LOAD_KEYWORDS.test(blob)) kw += 0.24;
+
+  return clamp(timeFactor * kw, 0.72, 1.58);
+}
+
+export type PlanAwareStrain = {
+  /** Added into functional_strain (follow-through, unfinished work). */
+  functionalPlanStrain: number;
+  /** Added into overload (anticipatory demands / mental load). */
+  overloadPlanBump: number;
+};
+
+/**
+ * Strain from the newest saved plan’s checklist: scales with **pending** work,
+ * per-step estimated heaviness, and school/work cues. **Zero when every step is done**
+ * so completed plans stop contributing to the radar.
+ */
+export function computePlanAwareStrain(
+  items: PlanChecklistItem[] | null | undefined,
+): PlanAwareStrain {
+  if (!items?.length) {
+    return { functionalPlanStrain: 0, overloadPlanBump: 0 };
+  }
+  const { completed, total } = planChecklistProgress(items);
+  if (total === 0) return { functionalPlanStrain: 0, overloadPlanBump: 0 };
+  if (completed >= total) {
+    return { functionalPlanStrain: 0, overloadPlanBump: 0 };
+  }
+
+  const pending = items.filter((i) => i.completed !== true);
+  const pendingCount = pending.length;
+  const pendingRatio = pendingCount / total;
+
+  let sumSeverity = 0;
+  let keywordPending = 0;
+  for (const it of pending) {
+    sumSeverity += pendingItemSeverityMultiplier(it);
+    if (PLAN_LOAD_KEYWORDS.test(planItemTextBlob(it))) keywordPending += 1;
+  }
+  const avgSeverity = sumSeverity / Math.max(1, pendingCount);
+  const keywordShare = keywordPending / Math.max(1, pendingCount);
+
+  const rawFunctional = 40 * pendingRatio * avgSeverity;
+  const functionalPlanStrain = roundScore(clamp(rawFunctional, 0, 46));
+
+  const overloadRaw =
+    15 *
+    pendingRatio *
+    (1 + 0.35 * keywordShare) *
+    (0.92 + 0.08 * avgSeverity);
+  const overloadPlanBump = roundScore(clamp(overloadRaw, 0, 22));
+
+  return { functionalPlanStrain, overloadPlanBump };
 }
 
 export function bandFromComposite(c: number): { band: BurnoutRiskBand; label: string } {
@@ -150,6 +232,7 @@ function buildTopDrivers(ctx: {
   pressureCount: number;
   symptoms: string[];
   planStrain: number;
+  overloadPlanBump: number;
 }): string[] {
   const out: string[] = [];
 
@@ -205,8 +288,8 @@ function buildTopDrivers(ctx: {
   if (ctx.symptoms.includes("social_withdrawal")) {
     out.push("Social withdrawal");
   }
-  if (ctx.planStrain >= 20) {
-    out.push("Plan follow-through is lagging");
+  if (ctx.planStrain >= 16 || ctx.overloadPlanBump >= 10) {
+    out.push("Unfinished plan tasks still add load");
   }
 
   // Unique, preserve order, cap 5
@@ -270,8 +353,8 @@ function buildNeedsAttention(
       return "Several demands are competing at once.";
     if (d === "Difficulty focusing") return "Attention and focus are under strain.";
     if (d === "Skipped class or work") return "Avoidance or pull-away at school/work showed up.";
-    if (d === "Plan follow-through is lagging")
-      return "Small steps on your plan may need simplifying.";
+    if (d === "Unfinished plan tasks still add load")
+      return "Open checklist items may be keeping strain higher until they’re done.";
     return `${d}—worth a closer look this week.`;
   });
   const merged = [...fromDrivers, ...extra];
@@ -338,6 +421,7 @@ export type BurnoutSnapshot = {
   pressureLen: number;
   symptoms: string[];
   planStrain: number;
+  overloadPlanBump: number;
 };
 
 function computeBurnoutSnapshot(
@@ -361,8 +445,18 @@ function computeBurnoutSnapshot(
   const pressureLen = intake.pressures.length;
   const pressureBump = clamp(Math.max(0, pressureLen - 1) * 14, 0, 40);
 
+  const planAware = computePlanAwareStrain(latestPlanChecklist ?? null);
+  const planStrain = planAware.functionalPlanStrain;
+
   const overload = roundScore(
-    stress01 * 100 * 0.62 + pressureBump * 0.55 + overloadSymptomBump * 0.85,
+    clamp(
+      stress01 * 100 * 0.62 +
+        pressureBump * 0.55 +
+        overloadSymptomBump * 0.85 +
+        planAware.overloadPlanBump,
+      0,
+      100,
+    ),
   );
 
   let depletionSymptomBump = 0;
@@ -382,8 +476,6 @@ function computeBurnoutSnapshot(
   const recC = consistencyStrain(checkin.sleep_consistency);
   const poorSleepTag = symptoms.includes("poor_sleep") ? 14 : 0;
   const recovery = roundScore((recD + recQ + recC) / 3 + poorSleepTag);
-
-  const planStrain = planFollowThroughStrain(latestPlanChecklist ?? null);
 
   let functionalBase = 0;
   for (const s of symptoms) {
@@ -408,7 +500,10 @@ function computeBurnoutSnapshot(
       id: "overload",
       label: "Overload",
       score: overload,
-      hint: "Demands, pressure, and mental load.",
+      hint:
+        planAware.overloadPlanBump > 0
+          ? "Demands and mental load; open plan steps add a little anticipatory pressure."
+          : "Demands, pressure, and mental load.",
     },
     {
       id: "depletion",
@@ -426,7 +521,10 @@ function computeBurnoutSnapshot(
       id: "functional_strain",
       label: "Functional strain",
       score: functional_strain,
-      hint: "Focus, follow-through, and day-to-day functioning.",
+      hint:
+        planStrain > 0
+          ? "Focus and follow-through—including unfinished steps on your latest saved plan."
+          : "Focus, follow-through, and day-to-day functioning.",
     },
   ];
 
@@ -439,9 +537,10 @@ function computeBurnoutSnapshot(
     pressureCount: pressureLen,
     symptoms,
     planStrain,
+    overloadPlanBump: planAware.overloadPlanBump,
   });
 
-  const hadPlanChecklist = (latestPlanChecklist?.length ?? 0) >= 3;
+  const hadPlanChecklist = (latestPlanChecklist?.length ?? 0) >= 1;
   const helping = buildHelping({
     stress,
     energy,
@@ -478,6 +577,7 @@ function computeBurnoutSnapshot(
     pressureLen,
     symptoms,
     planStrain,
+    overloadPlanBump: planAware.overloadPlanBump,
   };
 }
 
@@ -671,6 +771,81 @@ export function buildBurnoutViewModel(
     needsAttention: snap.needsAttention,
     disclaimer: STANDARD_DISCLAIMER,
   };
+}
+
+/** Newest plan explicitly marked complete by the user (plan_meta), all checklist steps done. */
+export function isPlanMarkedCompleteByUser(row: StoredPlan): boolean {
+  const m = row.plan_meta;
+  if (!m || typeof m !== "object") return false;
+  return (m as Record<string, unknown>).marked_complete_by_user === true;
+}
+
+/**
+ * When the latest plan is fully checked off and the user marked it complete, align the
+ * displayed “current” strain with the same rule-based “with tailored plan” level (no extra plans needed).
+ */
+export function planCompletionReliefComposite(
+  checkin: CheckinDetailResponse,
+  plans: StoredPlan[],
+  baselineComposite: number,
+): number | null {
+  const row = plans[0];
+  if (!row) return null;
+  if (!isPlanMarkedCompleteByUser(row)) return null;
+  const { completed, total } = planChecklistProgress(row.checklist_items);
+  if (total === 0 || completed !== total) return null;
+  const block = personalTasksBlockFromSinglePlan(row);
+  if (!block) return null;
+  const out = projectStrainFromTaskBlock(block, checkin, baselineComposite);
+  return out.withTailoredPlan;
+}
+
+/** Adjust overview strain to reflect completed-plan relief (dimensions scaled, band updated). */
+export function applyPlanCompletionRelief(
+  model: BurnoutViewModel,
+  checkin: CheckinDetailResponse,
+  plans: StoredPlan[],
+): BurnoutViewModel {
+  const relief = planCompletionReliefComposite(checkin, plans, model.composite);
+  if (relief == null) return model;
+  const raw = Math.max(1, model.composite);
+  const factor = relief / raw;
+  const newDimensions: BurnoutDimension[] = model.dimensions.map((d) => ({
+    ...d,
+    score: roundScore(clamp(d.score * factor, 0, 100)),
+  }));
+  const { band, label: bandLabel } = bandFromComposite(relief);
+  const summaryLine = buildSummaryLine({
+    band,
+    dimensions: newDimensions,
+  });
+  return {
+    ...model,
+    composite: relief,
+    band,
+    bandLabel,
+    dimensions: newDimensions,
+    summaryLine,
+  };
+}
+
+/**
+ * Same burnout readout as dashboard overview / Burnout tab: snapshot from the check-in
+ * (including plan checklist strain) plus {@link applyPlanCompletionRelief} when the newest
+ * saved plan is marked complete. Use this anywhere the UI or API should match those meters.
+ */
+export function buildDashboardAlignedBurnoutViewModel(
+  checkin: CheckinDetailResponse,
+  options: {
+    previousCheckin: CheckinDetailResponse | null;
+    plans: StoredPlan[];
+  },
+): BurnoutViewModel {
+  const raw = buildBurnoutViewModel(checkin, {
+    previousCheckin: options.previousCheckin,
+    latestPlanChecklist: options.plans[0]?.checklist_items ?? null,
+  });
+  return applyPlanCompletionRelief(raw, checkin, options.plans);
 }
 
 /** Placeholder view model when no check-in is saved yet (dashboard still usable). */

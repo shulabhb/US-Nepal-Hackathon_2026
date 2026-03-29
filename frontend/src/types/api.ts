@@ -166,6 +166,7 @@ export type StoredPlan = {
   model: string | null;
   source: string;
   created_at: string;
+  /** Saved-plan generation meta and/or flags such as `marked_complete_by_user`. */
   plan_meta?: SavedPlanGenerationMeta | Record<string, unknown> | null;
 };
 

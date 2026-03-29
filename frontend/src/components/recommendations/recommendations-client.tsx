@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { FirstCheckinGate } from "@/components/gates/first-checkin-gate";
 import { Separator } from "@/components/ui/separator";
 import { getLatestCheckin } from "@/lib/api/checkins";
 import { dashboardHref } from "@/lib/dashboard/dashboard-tab";
@@ -54,7 +55,9 @@ function snapshotRisk(snapshot: Record<string, unknown> | null | undefined): {
 
 export function RecommendationsClient() {
   const router = useRouter();
-  const [ready, setReady] = useState(false);
+  const [screen, setScreen] = useState<"loading" | "gate" | "ready">(
+    "loading",
+  );
   const [payload, setPayload] = useState<ReturnType<typeof buildRecommendations>>(
     null,
   );
@@ -79,14 +82,16 @@ export function RecommendationsClient() {
     (async () => {
       const rec = buildRecommendations(state);
       if (!rec) {
-        if (!cancelled) router.replace("/onboarding");
+        if (!cancelled) {
+          startTransition(() => setScreen("gate"));
+        }
         return;
       }
 
       if (!cancelled) {
         startTransition(() => {
           setPayload(rec);
-          setReady(true);
+          setScreen("ready");
         });
       }
 
@@ -135,7 +140,7 @@ export function RecommendationsClient() {
     router.push("/onboarding");
   };
 
-  if (!ready || !payload) {
+  if (screen === "loading") {
     return (
       <div
         className="flex min-h-screen items-center justify-center px-4"
@@ -144,6 +149,35 @@ export function RecommendationsClient() {
         <p className="sr-only">Loading your results</p>
       </div>
     );
+  }
+
+  if (screen === "gate") {
+    return (
+      <div className="relative min-h-screen bg-background">
+        <div
+          className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_85%_55%_at_50%_-8%,oklch(0.78_0.09_210_/0.14),transparent),radial-gradient(ellipse_55%_45%_at_100%_40%,oklch(0.55_0.05_250_/0.06),transparent)]"
+          aria-hidden
+        />
+        <div className="relative mx-auto max-w-2xl px-4 py-10 sm:py-14 md:px-6 lg:max-w-3xl lg:py-16">
+          <Link
+            href="/"
+            className="mb-10 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:rounded-md focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <ArrowLeft className="size-4 shrink-0" aria-hidden />
+            Back home
+          </Link>
+          <FirstCheckinGate
+            title="Check-in first"
+            description="Finish your first check-in so we can show your recommendations and help you see where things stand on this device."
+            onStartCheckin={() => router.push("/onboarding")}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (screen !== "ready" || !payload) {
+    return null;
   }
 
   return (

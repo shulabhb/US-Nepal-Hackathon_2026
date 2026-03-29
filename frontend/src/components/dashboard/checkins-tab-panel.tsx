@@ -13,6 +13,9 @@ import {
   chipLabelForHelpId,
   chipLabelForPressureId,
   chipLabelForRoleId,
+  labelSleepConsistency,
+  labelSleepDuration,
+  labelSleepQuality,
   labelSymptom,
   parseIntakeFromCheckin,
   riskLabelFromSnapshot,
@@ -28,6 +31,8 @@ type Props = {
   checkin: CheckinDetailResponse;
   formattedLatestSavedAt: string;
   anonymousId: string;
+  /** Burnout tab: compact snapshot, no duplicate okay/attention blocks. */
+  variant?: "default" | "essential";
 };
 
 function formatSavedIso(iso: string): string {
@@ -171,6 +176,246 @@ function MigrationSection({ migration }: { migration: ParsedMigration }) {
         </ul>
       ) : null}
     </section>
+  );
+}
+
+/** Tight layout: headline metrics + tags + optional private notes — no duplicate “okay / attention” panels. */
+function LatestCheckinDetailEssential({
+  checkin,
+  formattedCreatedAt,
+}: {
+  checkin: CheckinDetailResponse;
+  formattedCreatedAt: string;
+}) {
+  const intake = React.useMemo(
+    () => parseIntakeFromCheckin(checkin),
+    [checkin],
+  );
+  const risk = riskLabelFromSnapshot(checkin);
+  const summary = summaryFromSnapshot(checkin) ?? buildFallbackSnapshotLine(checkin);
+
+  const med = intake.sensitive?.medications?.trim() ?? "";
+  const cond = intake.sensitive?.medical_conditions?.trim() ?? "";
+  const extra = intake.additional_context?.trim() ?? "";
+  const migCtx = intake.migration?.migration_context?.trim() ?? "";
+  const hasPrivate = Boolean(med || cond || extra || migCtx);
+
+  const mig = intake.migration;
+  const showMigrationStrip =
+    mig &&
+    (mig.country_of_birth ||
+      mig.has_migration_history !== null ||
+      mig.migration_entries.length > 0);
+
+  const hasTags =
+    intake.roles.length > 0 ||
+    intake.pressures.length > 0 ||
+    intake.help_needs.length > 0 ||
+    checkin.symptoms.length > 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-border/65 bg-gradient-to-b from-card/85 to-card/55 px-4 py-3 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Latest snapshot
+            </p>
+            <p className="text-xs text-muted-foreground">{formattedCreatedAt}</p>
+          </div>
+          {risk ? (
+            <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">
+              {risk}
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-2 line-clamp-4 text-sm leading-relaxed text-foreground/95">
+          {summary}
+        </p>
+      </div>
+
+      <dl className="grid grid-cols-2 gap-2 rounded-xl border border-border/55 bg-muted/12 p-3 sm:grid-cols-3">
+        <div>
+          <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Stress
+          </dt>
+          <dd className="mt-0.5 text-base font-semibold tabular-nums text-foreground">
+            {checkin.stress_level}/10
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Energy
+          </dt>
+          <dd className="mt-0.5 text-base font-semibold tabular-nums text-foreground">
+            {checkin.energy_level}/10
+          </dd>
+        </div>
+        <div className="col-span-2 sm:col-span-1">
+          <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Sleep · duration
+          </dt>
+          <dd className="mt-0.5 text-sm font-medium text-foreground">
+            {labelSleepDuration(checkin.sleep_duration)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Quality
+          </dt>
+          <dd className="mt-0.5 text-sm font-medium text-foreground">
+            {labelSleepQuality(checkin.sleep_quality)}
+          </dd>
+        </div>
+        <div className="col-span-2 sm:col-span-1">
+          <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Consistency
+          </dt>
+          <dd className="mt-0.5 text-sm font-medium text-foreground">
+            {labelSleepConsistency(checkin.sleep_consistency)}
+          </dd>
+        </div>
+      </dl>
+
+      {hasTags ? (
+        <div className="space-y-2.5 rounded-xl border border-border/55 bg-card/40 px-3 py-3">
+          {intake.roles.length ? (
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Roles
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {intake.roles.map((id) => (
+                  <Chip key={id}>{chipLabelForRoleId(id)}</Chip>
+                ))}
+                {intake.role_other_text ? (
+                  <span className="self-center text-[11px] text-muted-foreground">
+                    + {intake.role_other_text}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {intake.pressures.length ? (
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Pressures
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {intake.pressures.map((id) => (
+                  <Chip key={id}>{chipLabelForPressureId(id)}</Chip>
+                ))}
+                {intake.pressure_other_text ? (
+                  <span className="self-center text-[11px] text-muted-foreground">
+                    + {intake.pressure_other_text}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {intake.help_needs.length ? (
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Help that would matter
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {intake.help_needs.map((id) => (
+                  <Chip key={id}>{chipLabelForHelpId(id)}</Chip>
+                ))}
+                {intake.help_other_text ? (
+                  <span className="self-center text-[11px] text-muted-foreground">
+                    + {intake.help_other_text}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          <div>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Symptoms
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {checkin.symptoms.length ? (
+                checkin.symptoms.map((id) => (
+                  <Chip key={id}>{labelSymptom(id)}</Chip>
+                ))
+              ) : (
+                <span className="text-xs text-muted-foreground">None selected</span>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showMigrationStrip ? (
+        <div className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+          <span className="font-medium text-foreground">Background · </span>
+          {mig!.country_of_birth ? <span>{mig!.country_of_birth}</span> : null}
+          {mig!.has_migration_history !== null ? (
+            <span>
+              {mig!.country_of_birth ? " · " : null}
+              {mig!.has_migration_history
+                ? "Lived outside country of birth"
+                : "Has not lived outside country of birth"}
+            </span>
+          ) : null}
+          {mig!.migration_entries.length > 0 ? (
+            <span>
+              {mig!.country_of_birth || mig!.has_migration_history !== null
+                ? " · "
+                : null}
+              {mig!.migration_entries.map((e) => e.country).join(", ")}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {hasPrivate ? (
+        <details className="group rounded-xl border border-border/60 bg-muted/10">
+          <summary className="cursor-pointer px-3 py-2.5 text-xs font-medium text-foreground marker:text-muted-foreground">
+            Private notes and extra context
+          </summary>
+          <div className="space-y-3 border-t border-border/40 px-3 py-3 text-sm leading-relaxed">
+            {med ? (
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Medications
+                </p>
+                <p className="mt-1 text-foreground/90">{med}</p>
+              </div>
+            ) : null}
+            {cond ? (
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Conditions
+                </p>
+                <p className="mt-1 text-foreground/90">{cond}</p>
+              </div>
+            ) : null}
+            {extra ? (
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Anything else
+                </p>
+                <p className="mt-1 text-foreground/90">{extra}</p>
+              </div>
+            ) : null}
+            {migCtx ? (
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Migration or cultural context
+                </p>
+                <p className="mt-1 text-foreground/90">{migCtx}</p>
+              </div>
+            ) : null}
+          </div>
+        </details>
+      ) : null}
+
+      <p className="text-center text-[10px] text-muted-foreground">
+        One saved check-in — illustrative only, not clinical.
+      </p>
+    </div>
   );
 }
 
@@ -392,10 +637,12 @@ function CheckinHistoryList({
   anonymousId,
   latestId,
   onOpenLatestTab,
+  variant = "default",
 }: {
   anonymousId: string;
   latestId: string;
   onOpenLatestTab: () => void;
+  variant?: "default" | "essential";
 }) {
   const [rows, setRows] = React.useState<CheckinHistoryItem[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -451,20 +698,28 @@ function CheckinHistoryList({
     );
   }
 
+  const dense = variant === "essential";
+
   return (
-    <div className="space-y-4">
-      <p className="text-xs text-muted-foreground">
-        Up to five recent saves, newest first. Tap{" "}
-        <span className="font-medium text-foreground/80">Latest</span> for the
-        full snapshot.
+    <div className="space-y-3">
+      <p
+        className={cn(
+          "text-muted-foreground",
+          dense ? "text-[11px] leading-snug sm:text-xs" : "text-xs",
+        )}
+      >
+        {dense
+          ? "Newest first (up to five). Open Latest for the full fields."
+          : "Up to five recent saves, newest first. Tap Latest for the full snapshot."}
       </p>
-      <div className="flex flex-col gap-3">
+      <div className={cn("flex flex-col", dense ? "gap-2" : "gap-3")}>
         {rows.map((item) => (
           <CheckinHistoryCompactCard
             key={item.id}
             item={item}
             formattedCreatedAt={formatSavedIso(item.created_at)}
             isLatest={item.id === latestId}
+            compact={dense}
             onOpenFullSnapshot={
               item.id === latestId ? onOpenLatestTab : undefined
             }
@@ -479,25 +734,33 @@ export function CheckinsTabPanel({
   checkin,
   formattedLatestSavedAt,
   anonymousId,
+  variant = "default",
 }: Props) {
   const [subtab, setSubtab] = React.useState<"latest" | "history">("latest");
+  const essential = variant === "essential";
 
   return (
     <div
       id="dashboard-checkin-preview"
-      className="mx-auto max-w-3xl space-y-6"
+      className={cn(
+        "mx-auto space-y-6",
+        essential ? "max-w-2xl" : "max-w-3xl",
+      )}
     >
       <div
         role="tablist"
         aria-label="Check-in view"
-        className="flex flex-wrap gap-1 rounded-2xl border border-border/80 bg-muted/20 p-1"
+        className={cn(
+          "flex flex-wrap gap-1 rounded-2xl border bg-muted/20 p-1",
+          essential ? "border-border/60" : "border-border/80",
+        )}
       >
         <button
           type="button"
           role="tab"
           aria-selected={subtab === "latest"}
           className={cn(
-            "min-h-10 flex-1 rounded-xl px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "min-h-9 flex-1 rounded-xl px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-10 sm:px-4",
             subtab === "latest"
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground",
@@ -511,7 +774,7 @@ export function CheckinsTabPanel({
           role="tab"
           aria-selected={subtab === "history"}
           className={cn(
-            "min-h-10 flex-1 rounded-xl px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "min-h-9 flex-1 rounded-xl px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-10 sm:px-4",
             subtab === "history"
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground",
@@ -523,15 +786,23 @@ export function CheckinsTabPanel({
       </div>
 
       {subtab === "latest" ? (
-        <LatestCheckinDetail
-          checkin={checkin}
-          formattedCreatedAt={formattedLatestSavedAt}
-        />
+        essential ? (
+          <LatestCheckinDetailEssential
+            checkin={checkin}
+            formattedCreatedAt={formattedLatestSavedAt}
+          />
+        ) : (
+          <LatestCheckinDetail
+            checkin={checkin}
+            formattedCreatedAt={formattedLatestSavedAt}
+          />
+        )
       ) : (
         <CheckinHistoryList
           anonymousId={anonymousId}
           latestId={checkin.id}
           onOpenLatestTab={() => setSubtab("latest")}
+          variant={variant}
         />
       )}
     </div>

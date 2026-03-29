@@ -6,23 +6,30 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { SupportChatPanelHandle } from "@/components/chat/support-chat-panel";
 import { SupportChatPanel } from "@/components/chat/support-chat-panel";
 import { BurnoutSummarySection } from "@/components/dashboard/burnout-summary-section";
-import { CheckinsTabPanel } from "@/components/dashboard/checkins-tab-panel";
+import { BurnoutCheckinSnapshotSection } from "@/components/dashboard/burnout-checkin-snapshot-section";
 import { PlanTabPanel } from "@/components/dashboard/plan-tab-panel";
 import { DashboardLanding } from "@/components/dashboard/dashboard-landing";
+import { FirstCheckinGate } from "@/components/gates/first-checkin-gate";
 import { AppShell } from "@/components/shell/app-shell";
-import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/dashboard/status-badge";
 import type { DashboardTabId } from "@/lib/dashboard/dashboard-tab";
 import {
+  CHAT_SEED_QUICK_PLAN,
   dashboardHref,
   isDashboardTabId,
   legacyDashboardTabRedirect,
   normalizeDashboardTab,
 } from "@/lib/dashboard/dashboard-tab";
 import { buildSeededAssistantMessage } from "@/lib/dashboard/seed-assistant-message";
-import { getLatestCheckinMaybe } from "@/lib/api/checkins";
-import { CHECKIN_INVITE } from "@/lib/app-copy";
-import { getOrCreateAnonymousId } from "@/lib/onboarding/anonymous-id";
+import {
+  deleteDeviceData,
+  getLatestCheckinMaybe,
+} from "@/lib/api/checkins";
+import { emitDashboardPlansMutated } from "@/lib/api/plans";
+import {
+  clearAnonymousId,
+  getOrCreateAnonymousId,
+} from "@/lib/onboarding/anonymous-id";
+import { clearOnboardingState } from "@/lib/onboarding/storage";
 import type { CheckinDetailResponse } from "@/types/api";
 
 function formatSavedAt(iso: string): string {
@@ -47,52 +54,17 @@ function riskLabelFrom(checkin: CheckinDetailResponse): string {
   return "Support focus";
 }
 
-function TabNeedCheckin({
-  title,
-  description,
-  onAddCheckin,
-}: {
-  title: string;
-  description: string;
-  onAddCheckin: () => void;
-}) {
-  return (
-    <div
-      className="mx-auto max-w-md rounded-2xl border border-border/55 bg-card/85 px-6 py-10 text-center shadow-sm"
-      role="region"
-      aria-labelledby="need-checkin-title"
-    >
-      <h2
-        id="need-checkin-title"
-        className="font-heading text-lg font-semibold tracking-tight text-foreground"
-      >
-        {title}
-      </h2>
-      <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-        {description}
-      </p>
-      <Button
-        type="button"
-        variant="outline"
-        className="mt-6 rounded-xl"
-        onClick={onAddCheckin}
-      >
-        {CHECKIN_INVITE}
-      </Button>
-      <p className="mt-4 text-xs text-muted-foreground">
-        Optional—you can keep browsing the rest of the dashboard.
-      </p>
-    </div>
-  );
-}
-
 export function DashboardClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeTab = normalizeDashboardTab(searchParams.get("tab"));
 
-  const [phase, setPhase] = useState<"loading" | "ready">("loading");
+  const [phase, setPhase] = useState<"loading" | "needs_checkin" | "ready">(
+    "loading",
+  );
   const [checkin, setCheckin] = useState<CheckinDetailResponse | null>(null);
+  const [gateNotice, setGateNotice] = useState<string | null>(null);
+  const [resetDeviceDataBusy, setResetDeviceDataBusy] = useState(false);
   const chatRef = useRef<SupportChatPanelHandle>(null);
 
   useEffect(() => {
@@ -114,51 +86,101 @@ export function DashboardClient() {
       try {
         const row = await getLatestCheckinMaybe(getOrCreateAnonymousId());
         if (cancelled) return;
+        if (row == null) {
+          setGateNotice(null);
+          setPhase("needs_checkin");
+          return;
+        }
         setCheckin(row);
+        setPhase("ready");
       } catch {
         if (cancelled) return;
-        setCheckin(null);
-      } finally {
-        if (!cancelled) setPhase("ready");
+        setGateNotice(
+          "We couldn’t load a saved check-in from the server. You can still start or continue check-in below.",
+        );
+        setPhase("needs_checkin");
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [router]);
 
   const reload = useCallback(() => {
     setPhase("loading");
     void (async () => {
       try {
         const row = await getLatestCheckinMaybe(getOrCreateAnonymousId());
+        if (row == null) {
+          setGateNotice(null);
+          setPhase("needs_checkin");
+          return;
+        }
         setCheckin(row);
-      } catch {
-        setCheckin(null);
-      } finally {
         setPhase("ready");
+      } catch {
+        setGateNotice(
+          "We couldn’t load a saved check-in from the server. You can still start or continue check-in below.",
+        );
+        setPhase("needs_checkin");
       }
     })();
-  }, []);
+  }, [router]);
 
   const handleRetake = useCallback(() => {
     router.push("/onboarding");
   }, [router]);
 
+  const handleResetDeviceData = useCallback(async () => {
+    if (
+      !window.confirm(
+        "Delete all check-ins and plans saved on this device, then go to the home page? This cannot be undone.",
+      )
+    ) {
+      return;
+    }
+    setResetDeviceDataBusy(true);
+    try {
+      await deleteDeviceData(getOrCreateAnonymousId());
+      clearOnboardingState();
+      clearAnonymousId();
+      emitDashboardPlansMutated();
+      router.push("/");
+    } catch (e) {
+      window.alert(
+        e instanceof Error ? e.message : "Could not reset data. Try again.",
+      );
+    } finally {
+      setResetDeviceDataBusy(false);
+    }
+  }, [router]);
+
   const pushTab = useCallback(
-    (tab: DashboardTabId) => {
-      router.push(dashboardHref(tab), { scroll: false });
+    (tab: DashboardTabId, extra?: Record<string, string>) => {
+      router.push(dashboardHref(tab, extra), { scroll: false });
     },
     [router],
   );
 
+  const stripChatSeedFromUrl = useCallback(() => {
+    router.replace(dashboardHref("chat"), { scroll: false });
+  }, [router]);
+
+  const chatSeedParam =
+    activeTab === "chat" &&
+    searchParams.get("chatSeed") === CHAT_SEED_QUICK_PLAN
+      ? CHAT_SEED_QUICK_PLAN
+      : null;
+
   if (phase === "loading") {
     return (
       <AppShell
-        activeTab={activeTab}
+        navVariant="minimal"
         onRetake={handleRetake}
         hasSavedCheckin={false}
+        onResetDeviceData={handleResetDeviceData}
+        resetDeviceDataBusy={resetDeviceDataBusy}
         viewportFill={activeTab === "chat"}
       >
         <div
@@ -172,14 +194,43 @@ export function DashboardClient() {
     );
   }
 
-  const seeded = checkin ? buildSeededAssistantMessage(checkin) : "";
-  const riskText = checkin ? riskLabelFrom(checkin) : "";
+  if (phase === "needs_checkin") {
+    return (
+      <AppShell
+        navVariant="minimal"
+        onRetake={handleRetake}
+        hasSavedCheckin={false}
+        viewportFill={false}
+      >
+        <div className="relative flex min-h-[55vh] flex-1 flex-col items-center justify-center px-4 py-10">
+          <div
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_75%_45%_at_50%_-8%,oklch(0.76_0.06_215_/0.11),transparent),radial-gradient(ellipse_50%_40%_at_100%_35%,oklch(0.55_0.04_250_/0.05),transparent)]"
+            aria-hidden
+          />
+          <FirstCheckinGate
+            notice={gateNotice}
+            title="Check-in first"
+            description="To open the dashboard and workspace on this device, complete your first check-in. It helps us show where things stand so we can help you understand your picture—not a diagnosis, just a clearer snapshot."
+            onStartCheckin={() => router.push("/onboarding")}
+          />
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (!checkin) {
+    return null;
+  }
+
+  const seeded = buildSeededAssistantMessage(checkin);
+  const riskText = riskLabelFrom(checkin);
 
   return (
     <AppShell
-      activeTab={activeTab}
       onRetake={handleRetake}
-      hasSavedCheckin={checkin != null}
+      hasSavedCheckin
+      onResetDeviceData={handleResetDeviceData}
+      resetDeviceDataBusy={resetDeviceDataBusy}
       viewportFill={activeTab === "chat"}
     >
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -195,24 +246,16 @@ export function DashboardClient() {
             role="tabpanel"
             aria-label="Support chat"
           >
-            {checkin ? (
-              <SupportChatPanel
-                ref={chatRef}
-                key={checkin.id}
-                anonymousId={getOrCreateAnonymousId()}
-                checkin={checkin}
-                initialAssistantMessage={seeded}
-                onOpenBurnout={() => pushTab("burnout")}
-              />
-            ) : (
-              <div className="flex flex-1 items-center justify-center py-12">
-                <TabNeedCheckin
-                  title="Chat is open—check-in optional"
-                  description="A saved check-in gives the assistant a bit more context (not clinical). Add one when you want, or stay here and start talking."
-                  onAddCheckin={handleRetake}
-                />
-              </div>
-            )}
+            <SupportChatPanel
+              ref={chatRef}
+              key={checkin.id}
+              anonymousId={getOrCreateAnonymousId()}
+              checkin={checkin}
+              initialAssistantMessage={seeded}
+              onOpenBurnout={() => pushTab("burnout")}
+              chatSeed={chatSeedParam}
+              onChatSeedConsumed={stripChatSeedFromUrl}
+            />
           </div>
         ) : (
           <div
@@ -228,6 +271,9 @@ export function DashboardClient() {
                   onRetake={handleRetake}
                   onOpenChat={() => pushTab("chat")}
                   onOpenPlan={() => pushTab("plan")}
+                  onPersonalizePlan={() =>
+                    pushTab("chat", { chatSeed: CHAT_SEED_QUICK_PLAN })
+                  }
                   onViewBurnout={() => pushTab("burnout")}
                 />
               </div>
@@ -254,56 +300,25 @@ export function DashboardClient() {
                     Your burnout picture
                   </h2>
                   <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                    Interpretation up top; your saved snapshot and history stay
-                    below for context.
+                    Summary and tabbed detail up top; expand{" "}
+                    <span className="font-medium text-foreground/85">
+                      Snapshot and history
+                    </span>{" "}
+                    below for essentials (latest fields and recent saves).
                   </p>
                 </div>
 
-                {checkin ? (
-                  <>
-                    <BurnoutSummarySection
-                      key={checkin.id}
-                      checkin={checkin}
-                      anonymousId={getOrCreateAnonymousId()}
-                    />
+                <BurnoutSummarySection
+                  key={checkin.id}
+                  checkin={checkin}
+                  anonymousId={getOrCreateAnonymousId()}
+                />
 
-                    <div className="space-y-2">
-                      <h3 className="font-heading text-sm font-semibold text-foreground">
-                        Snapshot & history
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        Raw check-in detail—same latest and history views as
-                        before.
-                      </p>
-                    </div>
-
-                    <CheckinsTabPanel
-                      checkin={checkin}
-                      formattedLatestSavedAt={formatSavedAt(checkin.created_at)}
-                      anonymousId={getOrCreateAnonymousId()}
-                    />
-                  </>
-                ) : (
-                  <TabNeedCheckin
-                    title="Burnout detail appears after a check-in"
-                    description="Meters, trends, and history need one saved snapshot—it’s private, optional, and you can pause anytime."
-                    onAddCheckin={handleRetake}
-                  />
-                )}
-
-                <div className="max-w-xl space-y-3 rounded-xl border border-border/65 bg-card/50 p-4 shadow-sm">
-                  <h3 className="font-heading text-sm font-semibold text-foreground">
-                    Insights
-                  </h3>
-                  <StatusBadge variant="soon">Coming soon</StatusBadge>
-                  <p className="text-sm leading-relaxed text-muted-foreground">
-                    Plain-language patterns across sleep, stress, and energy.
-                  </p>
-                </div>
-
-                <p className="text-xs text-muted-foreground">
-                  Charts and longer trends — coming later.
-                </p>
+                <BurnoutCheckinSnapshotSection
+                  checkin={checkin}
+                  formattedLatestSavedAt={formatSavedAt(checkin.created_at)}
+                  anonymousId={getOrCreateAnonymousId()}
+                />
               </div>
             ) : null}
           </div>

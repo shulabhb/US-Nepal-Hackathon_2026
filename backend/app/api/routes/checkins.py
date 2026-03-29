@@ -7,10 +7,12 @@ from app.schemas.checkin import (
 )
 from app.services.checkins import (
     CheckinPersistenceError,
+    delete_all_checkins_for_anonymous,
     fetch_latest_checkin,
     fetch_recent_checkins,
     insert_checkin,
 )
+from app.services.plans import PlanPersistenceError, delete_all_plans_for_anonymous
 
 router = APIRouter()
 
@@ -32,6 +34,27 @@ def create_checkin(body: CheckinCreateRequest) -> CheckinResponse:
         status="saved",
         message="Check-in saved successfully.",
     )
+
+
+@router.delete("/{anonymous_id}/device-data")
+def delete_device_data(anonymous_id: str) -> dict[str, bool | int]:
+    """
+    Delete all saved check-ins and plans for this device id (opaque anonymous_id).
+    Plans are removed first in case of optional linkage to check-in rows.
+    """
+    aid = anonymous_id.strip()
+    if not aid:
+        raise HTTPException(status_code=400, detail="anonymous_id is required.")
+
+    try:
+        delete_all_plans_for_anonymous(aid)
+        removed = delete_all_checkins_for_anonymous(aid)
+    except PlanPersistenceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except CheckinPersistenceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return {"ok": True, "checkins_deleted": removed}
 
 
 @router.get("/{anonymous_id}/history", response_model=list[CheckinDetailResponse])

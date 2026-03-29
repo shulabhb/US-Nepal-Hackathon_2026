@@ -4,11 +4,13 @@ import { Tooltip } from "@base-ui/react/tooltip";
 import {
   ClipboardList,
   Info,
+  Loader2,
   Lock,
   MessageCircle,
   RotateCcw,
   Target,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -24,9 +26,11 @@ import {
 import {
   bandFromComposite,
   buildBurnoutViewModel,
+  buildDashboardAlignedBurnoutViewModel,
   emptyBurnoutViewModel,
   overviewBestServices,
   overviewChatReason,
+  planCompletionReliefComposite,
   previousCheckinFromHistory,
   type BurnoutRiskBand,
   type OverviewNextMoveKind,
@@ -309,6 +313,8 @@ type Props = {
   riskLabel: string;
   onOpenChat: () => void;
   onOpenPlan: () => void;
+  /** “Personalize a plan” — open chat with guided plan flow. */
+  onPersonalizePlan: () => void;
   onOpenBurnout: () => void;
   onRetake: () => void;
 };
@@ -319,6 +325,7 @@ export function DashboardOverviewBurnout({
   riskLabel,
   onOpenChat,
   onOpenPlan,
+  onPersonalizePlan,
   onOpenBurnout,
   onRetake,
 }: Props) {
@@ -326,9 +333,20 @@ export function DashboardOverviewBurnout({
   const [previousCheckin, setPreviousCheckin] =
     useState<CheckinDetailResponse | null>(null);
   const [plans, setPlans] = useState<StoredPlan[]>([]);
+  /** False until history + plans load so strain matches one pipeline (no flash). */
+  const [planContextReady, setPlanContextReady] = useState(() => !hasCheckin);
 
   useEffect(() => {
     let cancelled = false;
+
+    if (!checkin?.id) {
+      setPlans([]);
+      setPreviousCheckin(null);
+      setPlanContextReady(true);
+      return;
+    }
+
+    setPlanContextReady(false);
     void Promise.allSettled([
       getCheckinHistory(anonymousId),
       getPlans(anonymousId),
@@ -339,11 +357,8 @@ export function DashboardOverviewBurnout({
       const planRows =
         results[1].status === "fulfilled" ? results[1].value : [];
       setPlans(planRows);
-      if (checkin?.id) {
-        setPreviousCheckin(previousCheckinFromHistory(history, checkin.id));
-      } else {
-        setPreviousCheckin(null);
-      }
+      setPreviousCheckin(previousCheckinFromHistory(history, checkin.id));
+      setPlanContextReady(true);
     });
 
     const onPlansMutated = () => {
@@ -362,11 +377,19 @@ export function DashboardOverviewBurnout({
     };
   }, [anonymousId, checkin?.id]);
 
-  const model = useMemo(() => {
+  const modelRaw = useMemo(() => {
     if (!checkin) return emptyBurnoutViewModel();
     return buildBurnoutViewModel(checkin, {
       previousCheckin,
       latestPlanChecklist: plans[0]?.checklist_items ?? null,
+    });
+  }, [checkin, previousCheckin, plans]);
+
+  const model = useMemo(() => {
+    if (!checkin) return emptyBurnoutViewModel();
+    return buildDashboardAlignedBurnoutViewModel(checkin, {
+      previousCheckin,
+      plans,
     });
   }, [checkin, previousCheckin, plans]);
 
@@ -397,12 +420,24 @@ export function DashboardOverviewBurnout({
         loadLine: null as string | null,
       };
     }
-    return computeBurnoutTaskProjection({
+    const proj = computeBurnoutTaskProjection({
       checkin,
       plans,
-      composite: model.composite,
+      composite: modelRaw.composite,
     });
-  }, [checkin, plans, model.composite]);
+    const relief = planCompletionReliefComposite(
+      checkin,
+      plans,
+      modelRaw.composite,
+    );
+    if (relief == null) return proj;
+    return {
+      ...proj,
+      current: relief,
+      ifNeglected: relief,
+      withTailoredPlan: relief,
+    };
+  }, [checkin, plans, modelRaw.composite]);
 
   const goService = (id: OverviewNextMoveKind) => {
     if (id === "chat") onOpenChat();
@@ -440,17 +475,23 @@ export function DashboardOverviewBurnout({
       )
     : "A short, anonymous snapshot of stress, sleep, energy, and pressures—updates your Now ring and keeps Plan, Chat, and burnout views grounded in how you’re doing now.";
 
+  const showStrainUi = !hasCheckin || planContextReady;
+
   const allMetersLocked = !hasCheckin;
-  const projectionPairLocked = hasCheckin && !taskProjection.hasSignal;
+  const projectionPairLocked =
+    showStrainUi && hasCheckin && !taskProjection.hasSignal;
 
   /** “Now” uses check-in + latest plan checklist (follow-through) via the view model; full triple projections need My tasks. */
-  const nowComposite = hasCheckin ? taskProjection.current : 0;
-  const neglectComposite = taskProjection.hasSignal
-    ? taskProjection.ifNeglected
-    : 0;
-  const withPlanComposite = taskProjection.hasSignal
-    ? taskProjection.withTailoredPlan
-    : 0;
+  const nowComposite =
+    showStrainUi && hasCheckin ? taskProjection.current : 0;
+  const neglectComposite =
+    showStrainUi && taskProjection.hasSignal
+      ? taskProjection.ifNeglected
+      : 0;
+  const withPlanComposite =
+    showStrainUi && taskProjection.hasSignal
+      ? taskProjection.withTailoredPlan
+      : 0;
 
   const pairDimmed = allMetersLocked || projectionPairLocked;
 
@@ -484,6 +525,11 @@ export function DashboardOverviewBurnout({
                   layout; add a check-in when you want them to light up—optional
                   and private.
                 </p>
+              ) : !showStrainUi ? (
+                <p className="text-balance">
+                  Loading saved plans and history so the strain readout matches
+                  your workspace—one calculation, no jump.
+                </p>
               ) : taskProjection.hasSignal ? (
                 <>
                   <p className="text-balance">
@@ -503,6 +549,18 @@ export function DashboardOverviewBurnout({
                   Your overall strain below still reflects your latest check-in.
                 </p>
               )}
+              {hasCheckin && showStrainUi ? (
+                <p className="mt-3 text-balance text-sm leading-relaxed text-muted-foreground sm:text-base sm:leading-relaxed">
+                  Has things changed since your last check-in?{" "}
+                  <Link
+                    href="/onboarding"
+                    className="font-medium text-primary underline decoration-primary/45 underline-offset-[3px] transition-colors hover:text-primary/90 hover:decoration-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    Re-check-in
+                  </Link>{" "}
+                  to update your snapshot.
+                </p>
+              ) : null}
             </div>
           </div>
           <div className="w-full shrink-0 lg:w-[min(100%,26.5rem)] xl:w-[min(100%,28.5rem)]">
@@ -519,95 +577,111 @@ export function DashboardOverviewBurnout({
                 Burnout meters
               </p>
               <div className="relative rounded-lg">
-                <Tooltip.Provider delay={150} closeDelay={80}>
+                {hasCheckin && !planContextReady ? (
                   <div
-                    className={cn(
-                      "-mx-1 flex min-h-[8.75rem] min-w-0 flex-nowrap items-start gap-x-4 pb-2 pt-0.5 sm:min-h-[10.25rem] sm:gap-x-6 md:gap-x-7",
-                      /* overflow-x makes overflow-y clip absolute overlays; only scroll when scenarios are unlocked */
-                      projectionPairLocked && !allMetersLocked
-                        ? "overflow-x-visible overflow-y-visible"
-                        : "overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:pb-0 [&::-webkit-scrollbar]:hidden",
-                    )}
-                    role="group"
-                    aria-labelledby="overview-burnout-meters-heading"
-                    aria-describedby={
-                      allMetersLocked || projectionPairLocked
-                        ? "meters-lock-help"
-                        : undefined
-                    }
+                    className="flex min-h-[10.25rem] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border/60 bg-muted/20 px-4 py-8"
+                    role="status"
+                    aria-live="polite"
                   >
+                    <Loader2
+                      className="size-7 animate-spin text-muted-foreground"
+                      aria-hidden
+                    />
+                    <p className="text-center text-xs text-muted-foreground sm:text-sm">
+                      Aligning strain with your saved plans…
+                    </p>
+                  </div>
+                ) : (
+                  <Tooltip.Provider delay={150} closeDelay={80}>
                     <div
                       className={cn(
-                        "shrink-0 transition-[opacity,filter] duration-200",
-                        allMetersLocked &&
-                          "opacity-[0.42] saturate-[0.9]",
+                        "-mx-1 flex min-h-[8.75rem] min-w-0 flex-nowrap items-start gap-x-4 pb-2 pt-0.5 sm:min-h-[10.25rem] sm:gap-x-6 md:gap-x-7",
+                        /* overflow-x makes overflow-y clip absolute overlays; only scroll when scenarios are unlocked */
+                        projectionPairLocked && !allMetersLocked
+                          ? "overflow-x-visible overflow-y-visible"
+                          : "overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:pb-0 [&::-webkit-scrollbar]:hidden",
                       )}
+                      role="group"
+                      aria-labelledby="overview-burnout-meters-heading"
+                      aria-describedby={
+                        allMetersLocked || projectionPairLocked
+                          ? "meters-lock-help"
+                          : undefined
+                      }
                     >
-                      <StrainRingGauge
-                        composite={nowComposite}
-                        label="Now"
-                        variant="triple"
-                        infoDescription={
-                          hasCheckin
-                            ? "Blended strain from your latest check-in plus follow-through on your saved plan checklist—open demanding steps tend to raise this readout; completed restorative or pacing steps tend to ease it."
-                            : "Lights up after a saved check-in: stress, energy, sleep, and how you’re keeping up with plan checklist steps."
-                        }
-                      />
-                    </div>
-
-                    <div className="relative flex shrink-0 flex-nowrap items-start gap-x-4 sm:gap-x-6 md:gap-x-7">
                       <div
                         className={cn(
                           "shrink-0 transition-[opacity,filter] duration-200",
-                          pairDimmed &&
+                          allMetersLocked &&
                             "opacity-[0.42] saturate-[0.9]",
                         )}
                       >
                         <StrainRingGauge
-                          composite={neglectComposite}
-                          label="If not paced"
+                          composite={nowComposite}
+                          label="Now"
                           variant="triple"
                           infoDescription={
-                            taskProjection.hasSignal
-                              ? "A rough illustration if the tasks and times you listed stay on full blast without pacing or boundaries. Based on your task list and energy signal—not a prediction."
-                              : "Needs a saved plan with tasks in My tasks—illustrates strain if workload stays at full blast without pacing."
-                          }
-                        />
-                      </div>
-                      <div
-                        className={cn(
-                          "shrink-0 transition-[opacity,filter] duration-200",
-                          pairDimmed &&
-                            "opacity-[0.42] saturate-[0.9]",
-                        )}
-                      >
-                        <StrainRingGauge
-                          composite={withPlanComposite}
-                          label="With your plan"
-                          variant="triple"
-                          infoDescription={
-                            taskProjection.hasSignal
-                              ? "Illustrative strain if you follow pacing and the steps in your saved plan (including recovery-style items). For motivation, not precision."
-                              : "Needs a saved plan with tasks in My tasks—motivational strain readout if you follow pacing and saved steps."
+                            hasCheckin
+                              ? "Blended strain from your latest check-in plus follow-through on your saved plan checklist—open demanding steps tend to raise this readout; completed restorative or pacing steps tend to ease it."
+                              : "Lights up after a saved check-in: stress, energy, sleep, and how you’re keeping up with plan checklist steps."
                           }
                         />
                       </div>
 
-                      {projectionPairLocked && !allMetersLocked ? (
-                        <StrainMetersLockOverlay
-                          compact
-                          planAction
-                          title="Scenario rings locked"
-                          description="Personalize a plan with tasks in My tasks to unlock these two projections—they use your task list and energy signal."
-                          actionLabel="Personalize a plan"
-                          onAction={onOpenPlan}
-                        />
-                      ) : null}
+                      <div className="relative flex shrink-0 flex-nowrap items-start gap-x-4 sm:gap-x-6 md:gap-x-7">
+                        <div
+                          className={cn(
+                            "shrink-0 transition-[opacity,filter] duration-200",
+                            pairDimmed &&
+                              "opacity-[0.42] saturate-[0.9]",
+                          )}
+                        >
+                          <StrainRingGauge
+                            composite={neglectComposite}
+                            label="If not paced"
+                            variant="triple"
+                            infoDescription={
+                              taskProjection.hasSignal
+                                ? "A rough illustration if the tasks and times you listed stay on full blast without pacing or boundaries. Based on your task list and energy signal—not a prediction."
+                                : "Needs a saved plan with tasks in My tasks—illustrates strain if workload stays at full blast without pacing."
+                            }
+                          />
+                        </div>
+                        <div
+                          className={cn(
+                            "shrink-0 transition-[opacity,filter] duration-200",
+                            pairDimmed &&
+                              "opacity-[0.42] saturate-[0.9]",
+                          )}
+                        >
+                          <StrainRingGauge
+                            composite={withPlanComposite}
+                            label="With your plan"
+                            variant="triple"
+                            infoDescription={
+                              taskProjection.hasSignal
+                                ? "Illustrative strain if you follow pacing and the steps in your saved plan (including recovery-style items). For motivation, not precision."
+                                : "Needs a saved plan with tasks in My tasks—motivational strain readout if you follow pacing and saved steps."
+                            }
+                          />
+                        </div>
+
+                        {projectionPairLocked && !allMetersLocked ? (
+                          <StrainMetersLockOverlay
+                            compact
+                            planAction
+                            title="Scenario rings locked"
+                            description="Personalize a plan with tasks in My tasks to unlock these two projections—they use your task list and energy signal."
+                            actionLabel="Personalize a plan"
+                            onAction={onPersonalizePlan}
+                          />
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                </Tooltip.Provider>
+                  </Tooltip.Provider>
+                )}
 
-                {allMetersLocked || projectionPairLocked ? (
+                {showStrainUi && (allMetersLocked || projectionPairLocked) ? (
                   <p id="meters-lock-help" className="sr-only">
                     {allMetersLocked
                       ? "All three rings are previews at zero until you add a check-in."
@@ -615,7 +689,7 @@ export function DashboardOverviewBurnout({
                   </p>
                 ) : null}
 
-                {allMetersLocked ? (
+                {showStrainUi && allMetersLocked ? (
                   <StrainMetersLockOverlay
                     title="Meters locked"
                     description="Add a check-in to unlock your Now ring and the summary below. Task scenarios unlock once you save a plan with My tasks."
@@ -628,11 +702,12 @@ export function DashboardOverviewBurnout({
           </div>
         </div>
 
-        {hasCheckin && supportSurface ? (
+        {hasCheckin && planContextReady && supportSurface ? (
           <OverviewStatusSection
             surface={supportSurface}
             disclaimer={model.disclaimer}
             onNavigate={goService}
+            onPersonalizePlan={onPersonalizePlan}
           />
         ) : null}
 
@@ -645,6 +720,20 @@ export function DashboardOverviewBurnout({
             structure, or a place to think out loud. None of this replaces
             professional care or crisis support.
           </p>
+          {!showStrainUi && hasCheckin ? (
+            <ul
+              className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-4"
+              aria-hidden
+            >
+              {Array.from({ length: 4 }).map((_, i) => (
+                <li
+                  key={i}
+                  className="h-[9.5rem] animate-pulse rounded-xl border border-border/40 bg-muted/30"
+                />
+              ))}
+            </ul>
+          ) : null}
+          {showStrainUi || !hasCheckin ? (
           <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-4">
             <li className="min-w-0">
               <button
@@ -755,6 +844,7 @@ export function DashboardOverviewBurnout({
               </button>
             </li>
           </ul>
+          ) : null}
         </div>
       </section>
     </div>

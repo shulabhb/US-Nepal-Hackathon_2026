@@ -11,10 +11,14 @@ from app.schemas.plan import GeneratedPlan, PlanChecklistItem
 
 
 class UpdatePlanChecklistRequest(BaseModel):
-    """PATCH body: replace checklist_items for one saved plan (completion ticks)."""
+    """PATCH body: replace checklist_items; optional merge into plan_meta (e.g. completion flag)."""
 
     anonymous_id: str = Field(..., min_length=1)
     checklist_items: list[PlanChecklistItem]
+    plan_meta: dict[str, Any] | None = Field(
+        default=None,
+        description="If set, shallow-merged into existing plan_meta on the row.",
+    )
 
     @model_validator(mode="after")
     def checklist_nonempty(self) -> UpdatePlanChecklistRequest:

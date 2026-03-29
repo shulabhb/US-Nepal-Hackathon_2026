@@ -18,6 +18,8 @@ type Props = {
   item: CheckinHistoryItem;
   formattedCreatedAt: string;
   isLatest: boolean;
+  /** Tighter padding and type — used under Burnout essential snapshot. */
+  compact?: boolean;
   /** When set and this row is the current latest, jumps to the full Latest tab view. */
   onOpenFullSnapshot?: () => void;
 };
@@ -34,6 +36,7 @@ export function CheckinHistoryCompactCard({
   item,
   formattedCreatedAt,
   isLatest,
+  compact = false,
   onOpenFullSnapshot,
 }: Props) {
   const risk = riskLabelFromSnapshot(item);
@@ -42,32 +45,76 @@ export function CheckinHistoryCompactCard({
   return (
     <article
       className={cn(
-        "rounded-2xl border border-border/70 bg-card/50 px-4 py-4 shadow-sm backdrop-blur-sm",
+        "rounded-2xl border border-border/70 bg-card/50 shadow-sm backdrop-blur-sm",
+        compact ? "px-3 py-3" : "px-4 py-4",
         isLatest && "ring-1 ring-primary/20",
       )}
     >
-      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border/40 pb-3">
+      <div
+        className={cn(
+          "flex flex-wrap items-start justify-between gap-2 border-b border-border/40",
+          compact ? "pb-2" : "pb-3",
+        )}
+      >
         <div>
-          <p className="text-xs text-muted-foreground">Saved</p>
-          <p className="text-sm font-medium text-foreground">{formattedCreatedAt}</p>
+          <p
+            className={cn(
+              "text-muted-foreground",
+              compact ? "text-[10px]" : "text-xs",
+            )}
+          >
+            Saved
+          </p>
+          <p
+            className={cn(
+              "font-medium text-foreground",
+              compact ? "text-xs" : "text-sm",
+            )}
+          >
+            {formattedCreatedAt}
+          </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {isLatest ? (
-            <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+            <span
+              className={cn(
+                "rounded-full bg-primary/10 font-medium uppercase tracking-wide text-primary",
+                compact
+                  ? "px-2 py-0.5 text-[9px]"
+                  : "px-2.5 py-0.5 text-[10px]",
+              )}
+            >
               Latest
             </span>
           ) : null}
           {risk ? (
-            <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+            <span
+              className={cn(
+                "rounded-full bg-muted font-medium text-foreground",
+                compact ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-0.5 text-xs",
+              )}
+            >
               {risk}
             </span>
           ) : null}
         </div>
       </div>
 
-      <p className="mt-3 text-sm leading-snug text-foreground/90">{summary}</p>
+      <p
+        className={cn(
+          "leading-snug text-foreground/90",
+          compact ? "mt-2 line-clamp-3 text-xs" : "mt-3 text-sm",
+        )}
+      >
+        {summary}
+      </p>
 
-      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-3">
+      <div
+        className={cn(
+          "grid grid-cols-2 gap-x-3 text-xs sm:grid-cols-3",
+          compact ? "mt-2 gap-y-1" : "mt-3 gap-x-4 gap-y-1.5",
+        )}
+      >
         <div>
           <span className="text-muted-foreground">Stress</span>
           <p className="font-medium text-foreground">{item.stress_level}/10</p>
@@ -97,7 +144,12 @@ export function CheckinHistoryCompactCard({
       </div>
 
       {(item.pressure || item.goal) && (
-        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-border/40 pt-3 text-xs">
+        <div
+          className={cn(
+            "flex flex-wrap gap-x-3 gap-y-1 border-t border-border/40 text-xs",
+            compact ? "mt-2 pt-2" : "mt-3 pt-3",
+          )}
+        >
           {item.pressure ? (
             <p>
               <span className="text-muted-foreground">Pressure · </span>
@@ -118,17 +170,27 @@ export function CheckinHistoryCompactCard({
       )}
 
       {item.symptoms.length > 0 ? (
-        <div className="mt-3 border-t border-border/40 pt-3">
-          <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        <div
+          className={cn(
+            "border-t border-border/40",
+            compact ? "mt-2 pt-2" : "mt-3 pt-3",
+          )}
+        >
+          <p
+            className={cn(
+              "font-medium uppercase tracking-wide text-muted-foreground",
+              compact ? "mb-1.5 text-[9px]" : "mb-2 text-[10px]",
+            )}
+          >
             Symptoms
           </p>
           <div className="flex flex-wrap gap-1.5">
-            {item.symptoms.slice(0, 8).map((id) => (
+            {item.symptoms.slice(0, compact ? 5 : 8).map((id) => (
               <MiniChip key={id}>{labelSymptom(id)}</MiniChip>
             ))}
-            {item.symptoms.length > 8 ? (
+            {item.symptoms.length > (compact ? 5 : 8) ? (
               <span className="self-center text-[11px] text-muted-foreground">
-                +{item.symptoms.length - 8} more
+                +{item.symptoms.length - (compact ? 5 : 8)} more
               </span>
             ) : null}
           </div>
@@ -136,13 +198,21 @@ export function CheckinHistoryCompactCard({
       ) : null}
 
       {isLatest && onOpenFullSnapshot ? (
-        <div className="mt-3 border-t border-border/40 pt-3">
+        <div
+          className={cn(
+            "border-t border-border/40",
+            compact ? "mt-2 pt-2" : "mt-3 pt-3",
+          )}
+        >
           <button
             type="button"
-            className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+            className={cn(
+              "font-medium text-primary underline-offset-4 hover:underline",
+              compact ? "text-[11px]" : "text-xs",
+            )}
             onClick={onOpenFullSnapshot}
           >
-            View full snapshot
+            Open Latest tab
           </button>
         </div>
       ) : null}
