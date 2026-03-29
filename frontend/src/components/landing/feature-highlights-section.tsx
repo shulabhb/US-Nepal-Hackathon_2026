@@ -49,7 +49,7 @@ export function FeatureHighlightsSection() {
       className="border-b border-border/60"
       aria-labelledby="features-heading"
     >
-      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
+      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
         <div className="max-w-2xl">
           <p className="text-xs font-semibold uppercase tracking-wider text-primary">
             Capabilities
@@ -65,7 +65,7 @@ export function FeatureHighlightsSection() {
             onboarding.
           </p>
         </div>
-        <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {features.map(({ icon: Icon, title, body }) => (
             <li
               key={title}

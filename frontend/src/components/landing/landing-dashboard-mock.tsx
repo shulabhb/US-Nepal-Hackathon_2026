@@ -1,231 +1,54 @@
-import {
-  ClipboardList,
-  MessageCircle,
-  RotateCcw,
-  Target,
-} from "lucide-react";
+import Image from "next/image";
 
-import {
-  bandFromComposite,
-  type BurnoutRiskBand,
-} from "@/lib/burnout/burnout-view-model";
 import { cn } from "@/lib/utils";
 
 type LandingDashboardMockProps = {
   className?: string;
 };
 
-function ringTrackClass(band: BurnoutRiskBand): string {
-  if (band === "low") return "text-emerald-500/18 dark:text-emerald-400/14";
-  if (band === "emerging") return "text-sky-500/20 dark:text-sky-400/16";
-  if (band === "moderate") return "text-amber-500/22 dark:text-amber-400/18";
-  return "text-rose-500/20 dark:text-rose-400/16";
-}
-
-function ringStrokeClass(band: BurnoutRiskBand): string {
-  if (band === "low") return "stroke-emerald-500/70 dark:stroke-emerald-400/75";
-  if (band === "emerging") return "stroke-sky-500/70 dark:stroke-sky-400/75";
-  if (band === "moderate") return "stroke-amber-500/72 dark:stroke-amber-400/75";
-  return "stroke-rose-500/70 dark:stroke-rose-400/75";
-}
-
-function clampPct(n: number): number {
-  return Math.min(100, Math.max(0, n));
-}
-
-const RING_R = 38;
-
-function MockStrainRing({
-  composite,
-  label,
-}: {
-  composite: number;
-  label: string;
-}) {
-  const { band } = bandFromComposite(composite);
-  const c = 2 * Math.PI * RING_R;
-  const offset = c * (1 - clampPct(composite) / 100);
-  const stroke = 7;
-
-  return (
-    <div className="flex flex-col items-center gap-1.5 text-center">
-      <div className="relative size-[4.35rem] shrink-0 sm:size-[4.85rem]">
-        <svg
-          className={cn("size-full -rotate-90", ringTrackClass(band))}
-          viewBox="0 0 100 100"
-          aria-hidden
-        >
-          <circle
-            cx="50"
-            cy="50"
-            r={RING_R}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={stroke}
-          />
-          <circle
-            cx="50"
-            cy="50"
-            r={RING_R}
-            fill="none"
-            strokeWidth={stroke}
-            strokeLinecap="round"
-            strokeDasharray={c}
-            strokeDashoffset={offset}
-            className={cn(
-              "transition-[stroke-dashoffset] duration-700 ease-out",
-              ringStrokeClass(band),
-            )}
-          />
-        </svg>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-heading text-lg font-bold tabular-nums tracking-tight text-foreground sm:text-xl">
-            {composite}
-          </span>
-          <span className="font-medium uppercase tracking-wide text-[8px] text-muted-foreground sm:text-[9px]">
-            /100
-          </span>
-        </div>
-      </div>
-      <p className="max-w-[5.5rem] text-[9px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-[10px]">
-        {label}
-      </p>
-    </div>
-  );
-}
-
-/** Decorative-only: burnout meters + four “What can help?” tiles (not live data). */
 export function LandingDashboardMock({ className }: LandingDashboardMockProps) {
   return (
     <div
       className={cn(
-        "pointer-events-none w-full select-none overflow-hidden rounded-2xl border border-border/40 bg-card/80 shadow-sm ring-1 ring-black/[0.03] backdrop-blur-sm",
+        "relative w-full select-none pb-12 pt-12 sm:pb-24 sm:pt-20 overflow-visible",
         className,
       )}
-      role="img"
-      aria-label="Example dashboard preview: illustrative burnout meters and the four workspace areas—Plan, Support chat, Burnout, check-in again. Not real data."
     >
-      <div className="h-1 w-full shrink-0 rounded-full bg-amber-500/40" />
-      <div className="space-y-4 px-3 py-4 sm:space-y-5 sm:px-4 sm:py-5">
-        <p className="text-center text-[9px] font-medium uppercase tracking-wider text-muted-foreground/90">
-          Example dashboard · not your data
-        </p>
+      {/* Abstract Dribbble-style background blur/glow */}
+      <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 aspect-square w-[120%] max-w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-tr from-sky-400/20 via-primary/15 to-violet-400/20 blur-3xl" />
+      
+      {/* Decorative dot pattern */}
+      <div className="pointer-events-none absolute inset-0 -z-20 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_65%,transparent_100%)] dark:bg-[radial-gradient(#1f2937_1px,transparent_1px)]" />
 
-        {/* Burnout meters — same shell as dashboard overview */}
-        <div
-          className={cn(
-            "rounded-2xl border border-border/50 px-3 py-3.5 shadow-md shadow-black/[0.04] sm:px-4 sm:py-4",
-            "bg-gradient-to-b from-card via-card to-muted/15 ring-1 ring-border/35",
-          )}
-        >
-          <p className="mb-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/85 sm:text-[10px]">
-            Burnout meters
-          </p>
-          <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground sm:text-xs">
-            Same three rings as the live dashboard: Now plus two scenario
-            projections once you have tasks—example numbers only here.
-          </p>
-          <div
-            className="-mx-0.5 flex flex-nowrap justify-center gap-3 sm:gap-5"
-            aria-hidden
-          >
-            <MockStrainRing composite={44} label="Now" />
-            <MockStrainRing composite={62} label="If not paced" />
-            <MockStrainRing composite={38} label="With your plan" />
+      <div className="relative z-10 grid grid-cols-2 gap-x-6 gap-y-4 sm:gap-x-10 sm:gap-y-6 lg:-mx-8 lg:gap-x-12">
+        <div className="flex flex-col gap-4 sm:gap-6 translate-y-6 sm:translate-y-12">
+          
+          <div className="group relative overflow-hidden rounded-xl sm:rounded-[1.75rem] border border-white/40 bg-white/40 p-[2px] sm:p-1 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] backdrop-blur-md transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_40px_80px_-15px_rgba(0,0,0,0.15)] dark:border-white/10 dark:bg-black/50">
+            <div className="relative overflow-hidden rounded-[0.65rem] sm:rounded-[1.5rem] bg-white ring-1 ring-black/5 dark:bg-black dark:ring-white/10">
+              <Image src="/dashboard.png" alt="Dashboard Snapshot" width={1200} height={1600} sizes="(max-width: 768px) 50vw, 400px" quality={100} className="h-auto w-full transition-transform duration-700 group-hover:scale-[1.03]" priority />
+            </div>
+          </div>
+          
+          <div className="group relative overflow-hidden rounded-xl sm:rounded-[1.75rem] border border-white/40 bg-white/40 p-[2px] sm:p-1 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] backdrop-blur-md transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_40px_80px_-15px_rgba(0,0,0,0.15)] dark:border-white/10 dark:bg-black/50">
+            <div className="relative overflow-hidden rounded-[0.65rem] sm:rounded-[1.5rem] bg-white ring-1 ring-black/5 dark:bg-black dark:ring-white/10">
+              <Image src="/plan.png" alt="Care Plan feature" width={1200} height={1600} sizes="(max-width: 768px) 50vw, 400px" quality={100} className="h-auto w-full transition-transform duration-700 group-hover:scale-[1.03]" priority />
+            </div>
           </div>
         </div>
-
-        {/* What can help? — four services (layout + accents match dashboard) */}
-        <div>
-          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:text-[10px]">
-            What can help?
-          </p>
-          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground sm:text-xs">
-            Matches Overview: Plan, Support chat, Burnout detail, and checking in
-            again when you’re ready.
-          </p>
-          <ul className="mt-3 grid grid-cols-2 gap-2 sm:gap-2.5 lg:grid-cols-4">
-            <li className="min-w-0">
-              <div
-                className={cn(
-                  "flex h-full flex-col items-center rounded-xl border border-border/50 bg-card/60 px-2 py-2.5 text-center shadow-sm sm:px-2.5 sm:py-3",
-                  "border-primary/22",
-                )}
-              >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary sm:size-10">
-                  <ClipboardList className="size-[1rem] sm:size-[1.05rem]" aria-hidden />
-                </span>
-                <span className="mt-2 min-w-0 space-y-0.5 px-0.5">
-                  <span className="block text-[10px] font-semibold leading-tight text-foreground sm:text-[11px]">
-                    Better plan your life
-                  </span>
-                  <span className="block text-[8px] font-medium uppercase leading-snug tracking-wide text-primary/85 sm:text-[9px]">
-                    Checklists &amp; My tasks
-                  </span>
-                </span>
-              </div>
-            </li>
-            <li className="min-w-0">
-              <div
-                className={cn(
-                  "flex h-full flex-col items-center rounded-xl border border-border/50 bg-card/60 px-2 py-2.5 text-center shadow-sm sm:px-2.5 sm:py-3",
-                  "border-violet-500/25",
-                )}
-              >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/12 text-violet-700 dark:text-violet-300 sm:size-10">
-                  <MessageCircle className="size-[1rem] sm:size-[1.05rem]" aria-hidden />
-                </span>
-                <span className="mt-2 min-w-0 space-y-0.5 px-0.5">
-                  <span className="block text-[10px] font-semibold leading-tight text-foreground sm:text-[11px]">
-                    Support chat
-                  </span>
-                  <span className="block text-[8px] font-medium leading-snug text-violet-700/95 dark:text-violet-300/95 sm:text-[9px]">
-                    Think out loud, calmly
-                  </span>
-                </span>
-              </div>
-            </li>
-            <li className="min-w-0">
-              <div
-                className={cn(
-                  "flex h-full flex-col items-center rounded-xl border border-border/50 bg-card/60 px-2 py-2.5 text-center shadow-sm sm:px-2.5 sm:py-3",
-                  "border-amber-500/25",
-                )}
-              >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/12 text-amber-800 dark:text-amber-200 sm:size-10">
-                  <Target className="size-[1rem] sm:size-[1.05rem]" aria-hidden />
-                </span>
-                <span className="mt-2 min-w-0 space-y-0.5 px-0.5">
-                  <span className="block text-[10px] font-semibold leading-tight text-foreground sm:text-[11px]">
-                    Prevent burnout
-                  </span>
-                  <span className="block text-[8px] font-medium uppercase leading-snug tracking-wide text-amber-800/88 dark:text-amber-200/88 sm:text-[9px]">
-                    Full snapshot &amp; history
-                  </span>
-                </span>
-              </div>
-            </li>
-            <li className="min-w-0">
-              <div
-                className={cn(
-                  "flex h-full flex-col items-center rounded-xl border border-border/50 bg-card/60 px-2 py-2.5 text-center shadow-sm sm:px-2.5 sm:py-3",
-                  "border-sky-500/25",
-                )}
-              >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/12 text-sky-800 dark:text-sky-200 sm:size-10">
-                  <RotateCcw className="size-[1rem] sm:size-[1.05rem]" aria-hidden />
-                </span>
-                <span className="mt-2 min-w-0 space-y-0.5 px-0.5">
-                  <span className="block text-balance text-[10px] font-semibold leading-tight text-foreground sm:text-[11px]">
-                    Re check in as you get better
-                  </span>
-                  <span className="block text-[8px] font-medium uppercase leading-snug tracking-wide text-sky-800/88 dark:text-sky-200/88 sm:text-[9px]">
-                    Refresh your snapshot
-                  </span>
-                </span>
-              </div>
-            </li>
-          </ul>
+        
+        <div className="flex flex-col gap-4 sm:gap-6 -translate-y-6 sm:-translate-y-10">
+          
+          <div className="group relative overflow-hidden rounded-xl sm:rounded-[1.75rem] border border-white/40 bg-white/40 p-[2px] sm:p-1 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] backdrop-blur-md transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_40px_80px_-15px_rgba(0,0,0,0.15)] dark:border-white/10 dark:bg-black/50">
+            <div className="relative overflow-hidden rounded-[0.65rem] sm:rounded-[1.5rem] bg-white ring-1 ring-black/5 dark:bg-black dark:ring-white/10">
+              <Image src="/rings.png" alt="Burnout Rings feature" width={1200} height={1600} sizes="(max-width: 768px) 50vw, 400px" quality={100} className="h-auto w-full transition-transform duration-700 group-hover:scale-[1.03]" priority />
+            </div>
+          </div>
+          
+          <div className="group relative overflow-hidden rounded-xl sm:rounded-[1.75rem] border border-white/40 bg-white/40 p-[2px] sm:p-1 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] backdrop-blur-md transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_40px_80px_-15px_rgba(0,0,0,0.15)] dark:border-white/10 dark:bg-black/50">
+            <div className="relative overflow-hidden rounded-[0.65rem] sm:rounded-[1.5rem] bg-white ring-1 ring-black/5 dark:bg-black dark:ring-white/10">
+              <Image src="/chat.png" alt="Support Chat detail" width={1200} height={1600} sizes="(max-width: 768px) 50vw, 400px" quality={100} className="h-auto w-full transition-transform duration-700 group-hover:scale-[1.03]" priority />
+            </div>
+          </div>
         </div>
       </div>
     </div>

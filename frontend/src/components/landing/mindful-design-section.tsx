@@ -10,8 +10,8 @@ export function MindfulDesignSection() {
       className="border-b border-border/60 bg-muted/35"
       aria-labelledby="mindful-heading"
     >
-      <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center lg:gap-16">
+      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center lg:gap-12">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-primary">
               Built with care

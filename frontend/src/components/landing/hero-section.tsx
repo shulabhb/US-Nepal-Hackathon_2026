@@ -20,24 +20,21 @@ export function HeroSection() {
       />
       <div className="relative mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:grid lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-12 lg:px-8 lg:py-24">
         <div>
-          <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/90 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm">
+          <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-1.5 text-sm font-bold text-foreground shadow-sm backdrop-blur-sm">
             <span className="relative flex size-2">
               <span className="absolute inline-flex size-full motion-safe:animate-ping rounded-full bg-primary/40 opacity-60" />
               <span className="relative inline-flex size-2 rounded-full bg-primary/80" />
             </span>
-            Private workspace · anonymous on this device
+            100% Anonymous
           </p>
           <h1
             id="hero-heading"
             className="font-heading text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-[2.75rem] lg:leading-[1.12]"
           >
-            See burnout strain in plain language—then act in one place.
+            Check your strain before you make your next plans.
           </h1>
           <p className="mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-            A structured check-in (stress, energy, symptoms, optional sleep)
-            powers your dashboard: illustrative strain rings, a tailored plan with
-            checklists, support chat that reads your snapshot, and a full Burnout
-            view when you want depth—not a diagnosis, no real name required.
+            A structured check-in (stress, energy, symptoms) gives you an illustrative snapshot of your strain before you organize your day or week. Use your private workspace to adjust tasks, follow tailored checklists, and get contextual support chat—not a diagnosis—and we never ask for your real name or number.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <Link
@@ -60,16 +57,16 @@ export function HeroSection() {
             </a>
           </div>
           <ul
-            className="mt-8 flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:gap-x-6 sm:gap-y-2"
-            aria-label="Privacy"
+            className="mt-8 flex flex-col gap-2 text-sm font-medium text-foreground/80 sm:flex-row sm:flex-wrap sm:gap-x-6 sm:gap-y-2"
+            aria-label="Privacy Check"
           >
             <li className="flex items-center gap-2">
               <UserX className="size-4 shrink-0 text-primary/80" aria-hidden />
-              <span>No real name</span>
+              <span>No names, no numbers</span>
             </li>
             <li className="flex items-center gap-2">
               <Lock className="size-4 shrink-0 text-primary/80" aria-hidden />
-              <span>Anonymous by default</span>
+              <span>100% anonymous check-ins</span>
             </li>
           </ul>
         </div>
