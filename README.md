@@ -1,5 +1,6 @@
 <div align="center">
-  <h1>🔋 Burnout Radar By Team All Nighters</h1>
+  <h1>🔋 Burnout Radar By Team All Nighters (team 11)</h1>
+  <p><strong>Shulabh Bhattarai || Siddhartha Shrestha || Shrutigya Uperety </strong></p>
   <p><strong>Check your strain before you make your next plans. 100% Anonymous.</strong></p>
   <p>
     <img src="https://img.shields.io/badge/Frontend-Next.js_16-black?style=for-the-badge&logo=next.js" alt="Next.js" />
