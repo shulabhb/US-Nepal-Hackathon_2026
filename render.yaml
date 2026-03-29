@@ -1,0 +1,16 @@
+# Render Blueprint — deploy the FastAPI backend from `backend/`.
+# https://render.com/docs/blueprint-spec
+#
+# After connecting the repo, Render can create/update the service from this file.
+# Set secrets (SUPABASE_*, FRONTEND_ORIGIN, etc.) in the Render dashboard or via `envVars` with `sync: false`.
+
+services:
+  - type: web
+    name: burnout-radar-api
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health

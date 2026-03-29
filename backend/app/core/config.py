@@ -14,7 +14,12 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_key: str = ""
     database_url: str | None = None
+    # Comma-separated list is supported (e.g. prod + Vercel preview URLs).
     frontend_origin: str = "http://localhost:3000"
+
+    @property
+    def frontend_origins(self) -> list[str]:
+        return [o.strip() for o in self.frontend_origin.split(",") if o.strip()]
 
     # Local model server (e.g. Ollama) — no external APIs; see README.
     local_ai_base_url: str = "http://127.0.0.1:11434"
