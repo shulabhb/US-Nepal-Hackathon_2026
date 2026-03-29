@@ -10,6 +10,7 @@ type LandingDashboardMockProps = {
 };
 
 const SLIDES = [
+  { src: "/home.png", alt: "Home" },
   { src: "/dashboard.png", alt: "Dashboard snapshot" },
   { src: "/rings.png", alt: "Burnout rings" },
   { src: "/plan.png", alt: "Care plan" },
@@ -73,32 +74,37 @@ export function LandingDashboardMock({ className }: LandingDashboardMockProps) {
         >
           <div className={cn(cardShell)}>
             <div className={imageInner}>
-              {SLIDES.map((slide, i) => (
-                <div
-                  key={slide.src}
-                  aria-hidden={i !== index}
-                  className={cn(
-                    "absolute inset-0 transition-opacity ease-out motion-reduce:transition-none",
-                    i === index
-                      ? "z-[2] opacity-100"
-                      : "z-[1] opacity-0 pointer-events-none",
-                  )}
-                  style={{
-                    transitionDuration: reduceMotion ? "0ms" : `${FADE_MS}ms`,
-                  }}
-                >
-                  <Image
-                    src={slide.src}
-                    alt={slide.alt}
-                    fill
-                    sizes={imgSizes}
-                    quality={100}
-                    className="object-contain object-center"
-                    priority={i === 0}
-                    draggable={false}
-                  />
-                </div>
-              ))}
+              {SLIDES.map((slide, i) => {
+                const active = i === index;
+                return (
+                  <div
+                    key={slide.src}
+                    aria-hidden={!active}
+                    className={cn(
+                      "absolute inset-0 transition-opacity ease-out motion-reduce:transition-none",
+                      active
+                        ? "z-[2] opacity-100"
+                        : "z-[1] opacity-0 pointer-events-none",
+                    )}
+                    style={{
+                      transitionDuration: reduceMotion ? "0ms" : `${FADE_MS}ms`,
+                    }}
+                  >
+                    <Image
+                      src={slide.src}
+                      alt={slide.alt}
+                      fill
+                      sizes={imgSizes}
+                      quality={100}
+                      className="object-contain object-center"
+                      priority={i === 0}
+                      loading="eager"
+                      fetchPriority={active ? "high" : "low"}
+                      draggable={false}
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
 
