@@ -37,7 +37,7 @@ Before you begin, ensure you have the following installed:
 - [Supabase Account](https://supabase.com/) (or local Supabase instance)
 - [Ollama](https://ollama.com/) (for running the local AI model)
 
----
+-- Clone main branch
 
 ### 🧠 1. Setup Local AI (Ollama)
 Because Burnout Radar guarantees absolute privacy, we use **Ollama** to run the AI completely localized on your machine.
