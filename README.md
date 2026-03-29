@@ -73,12 +73,12 @@ The backend manages the database connections and proxies requests to the local L
    pip install -r requirements.txt
    ```
 4. Set up Environment Variables:
-   - Copy the example `.env` file: `cp .env.example .env`
+   - Copy paste below env
    - Open `.env` and add your Supabase credentials:
      ```env
-     SUPABASE_URL="your-supabase-url"
-     SUPABASE_KEY="your-supabase-anon-key"
-     OLLAMA_BASE_URL="http://127.0.0.1:11434"
+     SUPABASE_URL=https://muqgtcrnpxudgvhftqbl.supabase.co
+     SUPABASE_KEY=sb_publishable_UYi3DqAYiF5433qj-Gj0tQ_6ibOyxVK
+     FRONTEND_ORIGIN=http://localhost:3000
      ```
 5. Start the backend server:
    ```bash
@@ -102,9 +102,7 @@ The frontend is built with Next.js App Router, TailwindCSS v4, and Shadcn UI.
 3. Set up Environment Variables:
    - Create a `.env.local` or `.env` file in the frontend directory based on your backend configs:
      ```env
-     NEXT_PUBLIC_API_URL=http://localhost:8000
-     NEXT_PUBLIC_SUPABASE_URL="your-supabase-url"
-     NEXT_PUBLIC_SUPABASE_ANON_KEY="your-supabase-anon-key"
+      NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
      ```
 4. Start the frontend development server:
    ```bash
