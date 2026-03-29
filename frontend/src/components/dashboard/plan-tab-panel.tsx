@@ -1,5 +1,6 @@
 "use client";
 
+import { Tooltip } from "@base-ui/react/tooltip";
 import {
   AlertCircle,
   Check,
@@ -19,6 +20,7 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StrainRingGauge } from "@/components/dashboard/strain-ring-gauge";
 import { Label } from "@/components/ui/label";
 import {
   buildPlanCheckinContext,
@@ -26,8 +28,11 @@ import {
 } from "@/lib/api/ai";
 import { buildBurnoutChatContext } from "@/lib/dashboard/chat-context";
 import {
+  buildBurnoutViewModel,
   buildDashboardAlignedBurnoutViewModel,
+  emptyBurnoutViewModel,
   isPlanMarkedCompleteByUser,
+  planCompletionReliefComposite,
 } from "@/lib/burnout/burnout-view-model";
 import {
   buildPlanContextPayload,
@@ -58,6 +63,7 @@ import {
   savePlan,
   updatePlanChecklist,
 } from "@/lib/api/plans";
+import { computeBurnoutTaskProjection } from "@/lib/dashboard/burnout-projection";
 import { cn } from "@/lib/utils";
 import type {
   CheckinDetailResponse,
@@ -1465,6 +1471,8 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
                     return (
                       <SavedPlanDetailView
                         row={row}
+                        checkin={checkin}
+                        savedPlans={savedPlans}
                         onDelete={confirmAndDeletePlan}
                         checklistSyncError={checklistSyncError}
                         onToggleChecklistItem={toggleSavedChecklistItem}
@@ -1545,6 +1553,8 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
 
 function SavedPlanDetailView({
   row,
+  checkin,
+  savedPlans,
   onDelete,
   checklistSyncError,
   onToggleChecklistItem,
@@ -1552,6 +1562,8 @@ function SavedPlanDetailView({
   markCompleteBusy,
 }: {
   row: StoredPlan;
+  checkin: CheckinDetailResponse | null;
+  savedPlans: StoredPlan[];
   onDelete: (row: StoredPlan) => void;
   checklistSyncError: string | null;
   onToggleChecklistItem: (index: number) => void;
@@ -1564,6 +1576,64 @@ function SavedPlanDetailView({
     rawChecklistProgress.completed === rawChecklistProgress.total &&
     !isPlanMarkedCompleteByUser(row);
   const markedComplete = isPlanMarkedCompleteByUser(row);
+  const meterPercent = markedComplete
+    ? 100
+    : rawChecklistProgress.percent;
+
+  const modelRaw = React.useMemo(() => {
+    if (!checkin) return emptyBurnoutViewModel();
+    return buildBurnoutViewModel(checkin, {
+      previousCheckin: null,
+      latestPlanChecklist: savedPlans[0]?.checklist_items ?? null,
+    });
+  }, [checkin, savedPlans]);
+
+  const taskProjection = React.useMemo(() => {
+    if (!checkin) {
+      return {
+        hasSignal: false,
+        current: 0,
+        ifNeglected: 0,
+        withTailoredPlan: 0,
+        loadLine: null as string | null,
+      };
+    }
+    const proj = computeBurnoutTaskProjection({
+      checkin,
+      plans: savedPlans,
+      composite: modelRaw.composite,
+    });
+    const relief = planCompletionReliefComposite(
+      checkin,
+      savedPlans,
+      modelRaw.composite,
+    );
+    if (relief == null) return proj;
+    return {
+      ...proj,
+      current: relief,
+      ifNeglected: relief,
+      withTailoredPlan: relief,
+    };
+  }, [checkin, savedPlans, modelRaw.composite]);
+
+  const hasCheckin = checkin != null;
+  const showStrainUi = hasCheckin;
+  const allMetersLocked = !hasCheckin;
+  const projectionPairLocked =
+    showStrainUi && !taskProjection.hasSignal;
+  const nowComposite =
+    showStrainUi && hasCheckin ? taskProjection.current : 0;
+  const neglectComposite =
+    showStrainUi && taskProjection.hasSignal
+      ? taskProjection.ifNeglected
+      : 0;
+  const withPlanComposite =
+    showStrainUi && taskProjection.hasSignal
+      ? taskProjection.withTailoredPlan
+      : 0;
+  const pairDimmed = allMetersLocked || projectionPairLocked;
+
   return (
     <div className="rounded-2xl border border-border/60 bg-card/50 p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1574,12 +1644,31 @@ function SavedPlanDetailView({
           >
             {row.title}
           </h3>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            {planTypeLabel(row.plan_type)}
-            <span aria-hidden> · </span>
-            <span className="whitespace-nowrap">
-              {formatSavedAt(row.created_at)}
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+            <span>
+              {planTypeLabel(row.plan_type)}
+              <span aria-hidden> · </span>
+              <span className="whitespace-nowrap">
+                {formatSavedAt(row.created_at)}
+              </span>
             </span>
+            {rawChecklistProgress.total > 0 ? (
+              <>
+                <span aria-hidden className="text-border/80">
+                  ·
+                </span>
+                <span className="tabular-nums text-foreground/75">
+                  {markedComplete
+                    ? rawChecklistProgress.total
+                    : rawChecklistProgress.completed}
+                  /
+                  {rawChecklistProgress.total}
+                </span>
+                <span className="sr-only">
+                  {meterPercent}% of checklist steps complete
+                </span>
+              </>
+            ) : null}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2 self-end sm:self-start">
@@ -1621,6 +1710,90 @@ function SavedPlanDetailView({
         Horizon <span aria-hidden>·</span> {row.time_horizon}
       </p>
 
+      {hasCheckin ? (
+        <div
+          className="mt-3 rounded-xl border border-border/35 bg-muted/10 px-1.5 py-2.5 sm:px-2.5 sm:py-3"
+          aria-label="Strain rings aligned with dashboard overview"
+        >
+          <p className="mb-1.5 text-center text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/85">
+            Strain (overview match)
+          </p>
+          <Tooltip.Provider delay={150} closeDelay={80}>
+            <div
+              className={cn(
+                "-mx-0.5 flex min-w-0 flex-nowrap items-start justify-center gap-x-2 overflow-x-auto pb-0.5 pt-0.5 sm:gap-x-3 md:gap-x-4",
+                projectionPairLocked && !allMetersLocked
+                  ? "overflow-x-visible"
+                  : "[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+              )}
+              role="group"
+            >
+              <div
+                className={cn(
+                  "shrink-0 transition-[opacity,filter] duration-200",
+                  allMetersLocked && "opacity-[0.42] saturate-[0.9]",
+                )}
+              >
+                <StrainRingGauge
+                  composite={nowComposite}
+                  label="Now"
+                  variant="triple-subtle"
+                  infoDescription={
+                    hasCheckin
+                      ? "Blended strain from your latest check-in plus follow-through on your saved plan checklist—open demanding steps tend to raise this readout; completed restorative or pacing steps tend to ease it."
+                      : "Lights up after a saved check-in: stress, energy, sleep, and how you’re keeping up with plan checklist steps."
+                  }
+                />
+              </div>
+              <div className="relative flex shrink-0 flex-nowrap items-start gap-x-2 sm:gap-x-3 md:gap-x-4">
+                <div
+                  className={cn(
+                    "shrink-0 transition-[opacity,filter] duration-200",
+                    pairDimmed && "opacity-[0.42] saturate-[0.9]",
+                  )}
+                >
+                  <StrainRingGauge
+                    composite={neglectComposite}
+                    label="If not paced"
+                    variant="triple-subtle"
+                    infoDescription={
+                      taskProjection.hasSignal
+                        ? "A rough illustration if the tasks and times you listed stay on full blast without pacing or boundaries. Based on your task list and energy signal—not a prediction."
+                        : "Needs a saved plan with tasks in My tasks—illustrates strain if workload stays at full blast without pacing."
+                    }
+                  />
+                </div>
+                <div
+                  className={cn(
+                    "shrink-0 transition-[opacity,filter] duration-200",
+                    pairDimmed && "opacity-[0.42] saturate-[0.9]",
+                  )}
+                >
+                  <StrainRingGauge
+                    composite={withPlanComposite}
+                    label="With your plan"
+                    variant="triple-subtle"
+                    infoDescription={
+                      taskProjection.hasSignal
+                        ? "Illustrative strain if you follow pacing and the steps in your saved plan (including recovery-style items). For motivation, not precision."
+                        : "Needs a saved plan with tasks in My tasks—motivational strain readout if you follow pacing and saved steps."
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+          </Tooltip.Provider>
+          {projectionPairLocked && !allMetersLocked ? (
+            <p className="mt-2 px-1 text-center text-[10px] leading-snug text-muted-foreground">
+              Add tasks under{" "}
+              <span className="font-medium text-foreground/90">My tasks</span>{" "}
+              on a saved plan to unlock the two scenario rings—same rule as the
+              overview.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       {(() => {
         const pm = personalTasksMetaFromRow(row);
         if (!pm) return null;
@@ -1658,18 +1831,35 @@ function SavedPlanDetailView({
         );
       })()}
 
-      <div className="mt-4">
-        <PlanProgressBar
-          items={row.checklist_items}
-          markedPlanComplete={markedComplete}
-        />
-      </div>
       {checklistSyncError ? (
         <p className="mt-1.5 text-xs text-destructive" role="alert">
           {checklistSyncError}
         </p>
       ) : null}
-      <div className="mt-3">
+      <div
+        className={cn(
+          "relative mt-3",
+          rawChecklistProgress.total > 0 && "pl-2 sm:pl-2.5",
+        )}
+      >
+        {rawChecklistProgress.total > 0 ? (
+          <div
+            className="pointer-events-none absolute bottom-0 left-0 top-0 w-[3px] overflow-hidden rounded-full bg-muted/30"
+            aria-hidden
+          >
+            <div
+              className={cn(
+                "absolute bottom-0 left-0 right-0 rounded-full transition-[height] duration-300 ease-out",
+                markedComplete
+                  ? "bg-emerald-500/50"
+                  : "bg-primary/45",
+              )}
+              style={{
+                height: `${meterPercent}%`,
+              }}
+            />
+          </div>
+        ) : null}
         <PlanTaskList
           items={row.checklist_items}
           interactive={!markedComplete}
