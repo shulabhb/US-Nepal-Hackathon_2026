@@ -33,7 +33,7 @@ _PLAN_OUTPUT_SHAPE_EXAMPLE: dict[str, Any] = {
             "label": "Short action title (few words)",
             "description": "2–4 sentences: what to do; then explicitly which user-reported struggle, goal, symptom, sleep/stress pattern, or plan answer this step addresses (only from their data). Non-clinical.",
             "time_estimate": "~15 minutes",
-            "additional_info": "Optional: one line naming a specific detail they gave (e.g. exam date). Omit if not needed.",
+            "additional_info": "Optional: one line naming a specific detail they gave (e.g. a date they mentioned). Omit if not needed.",
         }
     ],
     "notes": [
@@ -364,13 +364,13 @@ Plan type requested: {req.plan_type}
 {ctx_json}
 
 Requirements:
-- title: short, encouraging; fix obvious spelling of subject or exam names from their answers (e.g. “Linear Algebra” not typos). If a user plan name was given, prefer incorporating it. Never include UUIDs, hex ids, "anonymous", or opaque ids.
+- title: short, encouraging; fix obvious spelling only for names or subjects that already appear in their answers or check-in JSON—never invent course or exam names. Do not copy placeholder examples from these instructions. If a user plan name was given, prefer incorporating it. Never include UUIDs, hex ids, "anonymous", or opaque ids.
 - plan_type: repeat or refine "{req.plan_type}" as a short label
 {summary_bullet}
 - time_horizon: must match {"this single day" if (req.schedule_kind == "daily") else "this week" if (req.schedule_kind == "weekly") else "the checklist"} — e.g. "today", "this week"
 - checklist_items: at least 1 task, at most {max_items}; each task MUST have:
   - label: short scannable headline (not empty)
-  - description: 2–4 sentences, non-clinical. First sentence(s): concrete action. MUST include at least one sentence that explicitly names WHICH user-reported theme this step addresses—draw only from: (a) USER-REPORTED THEMES above, (b) plan_context Q&A, (c) user_tasks list, (d) JSON fields (symptoms, pressures, goals, sleep/stress/energy). Example: "This responds to what you shared about struggling to build a study plan before your exam." If a step is recovery or pacing, say how it balances a load or symptom they reported. Do not claim a link to data that is not in their context.
+  - description: 2–4 sentences, non-clinical. First sentence(s): concrete action. MUST include at least one sentence that explicitly names WHICH user-reported theme this step addresses—draw only from: (a) USER-REPORTED THEMES above, (b) plan_context Q&A, (c) user_tasks list, (d) JSON fields (symptoms, pressures, goals, sleep/stress/energy). Tie the explanation to their actual words or ids from those sources—do not reuse sample phrases from this prompt and do not invent courses, employers, family, pets, or schedules unless present there. If a step is recovery or pacing, say how it balances a load or symptom they reported. Do not claim a link to data that is not in their context.
   - time_estimate: required on EVERY item—never omit; realistic duration (e.g. "~10 min", "~30 min")
   - additional_info: optional one line that ties to a specific plan_context answer or check-in detail (e.g. dates, hours per day they gave)—omit if redundant
   Keep labels concise; descriptions may be longer for clarity. No diagnosis or treatment claims.

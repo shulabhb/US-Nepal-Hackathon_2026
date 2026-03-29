@@ -3,13 +3,17 @@
 import {
   AlertCircle,
   Check,
+  ClipboardList,
+  Download,
   FolderOpen,
   Loader2,
+  MessageCircle,
   Plus,
   Sparkles,
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
@@ -37,7 +41,12 @@ import {
   normalizeChecklistForApi,
   planChecklistProgress,
 } from "@/lib/dashboard/plan-checklist";
+import { downloadPlanPdf } from "@/lib/dashboard/plan-pdf";
 import { planProgressForDisplay } from "@/lib/dashboard/plan-progress-display";
+import {
+  CHAT_SEED_QUICK_PLAN,
+  dashboardHref,
+} from "@/lib/dashboard/dashboard-tab";
 import {
   DASHBOARD_RECENT_PLANS_LIMIT,
   recentPlansForDashboard,
@@ -344,6 +353,7 @@ type Props = {
 };
 
 export function PlanTabPanel({ checkin, anonymousId }: Props) {
+  const router = useRouter();
   const [planSubView, setPlanSubView] = React.useState<PlanSubView>("saved");
   const [planType, setPlanType] = React.useState<PlanTypeId>("personal_tasks");
   const [planContextAnswers, setPlanContextAnswers] = React.useState<
@@ -379,6 +389,10 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
   const [planActionError, setPlanActionError] = React.useState<string | null>(
     null,
   );
+  const [newPlanChoiceOpen, setNewPlanChoiceOpen] = React.useState(false);
+  const [newPlanChoiceSource, setNewPlanChoiceSource] = React.useState<
+    "saved" | "generated" | null
+  >(null);
 
   const loadSavedPlans = React.useCallback(async () => {
     setSavedListError(null);
@@ -560,6 +574,46 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
     setSaveState({ status: "idle" });
     setPanel({ status: "idle" });
   }, []);
+
+  const closeNewPlanChoice = React.useCallback(() => {
+    setNewPlanChoiceOpen(false);
+    setNewPlanChoiceSource(null);
+  }, []);
+
+  const openNewPlanChoice = React.useCallback(
+    (source: "saved" | "generated") => {
+      setNewPlanChoiceSource(source);
+      setNewPlanChoiceOpen(true);
+    },
+    [],
+  );
+
+  const chooseManualNewPlan = React.useCallback(() => {
+    const src = newPlanChoiceSource;
+    closeNewPlanChoice();
+    if (src === "generated") {
+      startNewPlan();
+    }
+    setPlanSubView("create");
+  }, [newPlanChoiceSource, closeNewPlanChoice, startNewPlan]);
+
+  const chooseChatNewPlan = React.useCallback(() => {
+    const src = newPlanChoiceSource;
+    closeNewPlanChoice();
+    if (src === "generated") {
+      startNewPlan();
+    }
+    router.push(dashboardHref("chat", { chatSeed: CHAT_SEED_QUICK_PLAN }));
+  }, [newPlanChoiceSource, closeNewPlanChoice, startNewPlan, router]);
+
+  React.useEffect(() => {
+    if (!newPlanChoiceOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeNewPlanChoice();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [newPlanChoiceOpen, closeNewPlanChoice]);
 
   const toggleFreshChecklistItem = React.useCallback((index: number) => {
     setLastGenerated((prev) => {
@@ -1197,7 +1251,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
                     type="button"
                     variant="outline"
                     className="rounded-xl"
-                    onClick={startNewPlan}
+                    onClick={() => openNewPlanChoice("generated")}
                   >
                     Generate new plan
                   </Button>
@@ -1280,7 +1334,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
                 type="button"
                 variant="secondary"
                 className="mt-4 rounded-xl"
-                onClick={() => setPlanSubView("create")}
+                onClick={() => openNewPlanChoice("saved")}
               >
                 Create your first plan
               </Button>
@@ -1379,7 +1433,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
                     variant="outline"
                     size="sm"
                     className="mt-3 hidden w-full gap-1.5 rounded-xl md:flex"
-                    onClick={() => setPlanSubView("create")}
+                    onClick={() => openNewPlanChoice("saved")}
                   >
                     <Plus className="size-3.5" aria-hidden />
                     New plan
@@ -1392,7 +1446,7 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
                     variant="outline"
                     size="sm"
                     className="mb-4 gap-1.5 rounded-xl md:hidden"
-                    onClick={() => setPlanSubView("create")}
+                    onClick={() => openNewPlanChoice("saved")}
                   >
                     <Plus className="size-3.5" aria-hidden />
                     New plan
@@ -1425,6 +1479,66 @@ export function PlanTabPanel({ checkin, anonymousId }: Props) {
           )}
         </div>
       </div>
+
+      {newPlanChoiceOpen ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-background/85 backdrop-blur-[2px]"
+            aria-label="Close dialog"
+            onClick={closeNewPlanChoice}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-plan-choice-title"
+            className="relative z-[1] w-full max-w-md rounded-2xl border border-border/70 bg-card p-5 shadow-lg"
+          >
+            <h3
+              id="new-plan-choice-title"
+              className="font-heading text-lg font-semibold tracking-tight text-foreground"
+            >
+              How do you want to build a plan?
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              <span className="font-medium text-foreground/90">
+                Support chat
+              </span>{" "}
+              walks you through the same questions in conversation.{" "}
+              <span className="font-medium text-foreground/90">
+                Manual
+              </span>{" "}
+              keeps you on this tab with the form below.
+            </p>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Button
+                type="button"
+                className="h-11 flex-1 gap-2 rounded-xl sm:min-w-[10rem]"
+                onClick={chooseChatNewPlan}
+              >
+                <MessageCircle className="size-4 shrink-0" aria-hidden />
+                Use Support chat
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 flex-1 gap-2 rounded-xl sm:min-w-[10rem]"
+                onClick={chooseManualNewPlan}
+              >
+                <ClipboardList className="size-4 shrink-0" aria-hidden />
+                Use form on this tab
+              </Button>
+            </div>
+            <button
+              type="button"
+              className="mt-4 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              onClick={closeNewPlanChoice}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1452,7 +1566,7 @@ function SavedPlanDetailView({
   const markedComplete = isPlanMarkedCompleteByUser(row);
   return (
     <div className="rounded-2xl border border-border/60 bg-card/50 p-4 shadow-sm sm:p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h3
             id={`saved-plan-${row.id}-title`}
@@ -1468,16 +1582,36 @@ function SavedPlanDetailView({
             </span>
           </p>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-9 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-          aria-label={`Delete ${row.title}`}
-          onClick={() => onDelete(row)}
-        >
-          <Trash2 className="size-4" aria-hidden />
-        </Button>
+        <div className="flex shrink-0 items-center gap-2 self-end sm:self-start">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5 rounded-xl"
+            onClick={() =>
+              downloadPlanPdf({
+                title: row.title,
+                summary: row.summary,
+                time_horizon: row.time_horizon,
+                checklist_items: row.checklist_items,
+                notes: row.notes ?? [],
+              })
+            }
+          >
+            <Download className="size-3.5" aria-hidden />
+            PDF
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-9 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            aria-label={`Delete ${row.title}`}
+            onClick={() => onDelete(row)}
+          >
+            <Trash2 className="size-4" aria-hidden />
+          </Button>
+        </div>
       </div>
 
       <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
@@ -1639,6 +1773,26 @@ function GeneratedPlanCard({
         </div>
 
         {primaryActions ? <div>{primaryActions}</div> : null}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5 rounded-xl"
+            onClick={() =>
+              downloadPlanPdf({
+                title: plan.title,
+                summary: plan.summary,
+                time_horizon: plan.time_horizon,
+                checklist_items: plan.checklist_items,
+                notes: plan.notes ?? [],
+              })
+            }
+          >
+            <Download className="size-3.5" aria-hidden />
+            Download PDF
+          </Button>
+        </div>
         {afterPrimaryActions ? <div>{afterPrimaryActions}</div> : null}
 
         <div>
